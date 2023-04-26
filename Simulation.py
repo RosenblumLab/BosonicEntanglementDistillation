@@ -29,11 +29,11 @@ class Simulation:
 
     def __create_initial_state(self, *args, **kwargs) -> State:
         return State.create(
-            self.initial_state_name,
-            self.number_of_fock_states,
-            self.number_of_parties,
-            self.number_of_rotations,
-            False,
+            name=self.initial_state_name,
+            number_of_fock_states=self.number_of_fock_states,
+            number_of_parties=self.number_of_parties,
+            number_of_rotations=self.number_of_rotations,
+            rotate_before_sum=False,
             *args,
             **kwargs)
 
@@ -42,7 +42,7 @@ class Simulation:
 
     def __run_protocol(self) -> State:
         wigner_parity_operator = Operator.create(
-            'wigner-parity',
+            name='wigner-parity',
             number_of_fock_states=self.number_of_fock_states,
             number_of_rotated_parts=self.number_of_parity_sectors,
             number_of_parties=self.number_of_parties)
