@@ -1,8 +1,9 @@
 import qutip
 import numpy as np
 
-from QutipWrapper import QutipWrapper
 from itertools import product
+
+from QutipWrapper import QutipWrapper
 
 
 class Operator(QutipWrapper):
