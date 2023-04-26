@@ -1,6 +1,7 @@
 import qutip
 import numpy as np
 
+from Operator import Operator
 from QutipWrapper import QutipWrapper
 
 
@@ -29,5 +30,28 @@ class State(QutipWrapper):
     }
 
     @classmethod
-    def create(cls, name: str, number_of_fock_states: int, *args, **kwargs):
-        return cls(super().create(name, number_of_fock_states, *args, **kwargs).unit())
+    def create(
+            cls,
+            name: str,
+            number_of_fock_states: int,
+            number_of_parties: int = 1,
+            number_of_rotations: int = 1,
+            rotate_before_sum: bool = True,
+            *args,
+            **kwargs):
+        return cls(super().create(
+            name,
+            number_of_fock_states,
+            number_of_parties,
+            number_of_rotations,
+            rotate_before_sum,
+            *args,
+            **kwargs).unit())
+
+    def apply_operator(self, operator: qutip.Qobj):
+        if self.dims[1][0] == 1:
+            return self.__class__(operator * self)
+        return self.__class__(super().apply_operator(operator))
+
+    def evaluate_operator(self, operator: Operator):
+        return self.apply_operator(operator).unit()
