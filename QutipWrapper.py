@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import qutip
 
 import numpy as np
@@ -8,15 +10,15 @@ class QutipWrapper(qutip.Qobj):
     creation_functions = {}
 
     @classmethod
-    def __create_rotated(
+    def _create_rotated(
             cls,
-            base,
+            base: QutipWrapper,
             number_of_fock_states: int,
             number_of_parties: int = 1,
             number_of_rotations: int = 1):
 
         number_operator = qutip.num(number_of_fock_states)
-        state = base
+        state = qutip.tensor(*(base,) * number_of_parties)
 
         for i in range(1, number_of_rotations):
             rotated_base = cls.apply_operator(
@@ -26,8 +28,8 @@ class QutipWrapper(qutip.Qobj):
         return state
 
     @classmethod
-    def __create_local(cls, base, number_of_fock_states: int, number_of_parties: int = 1, number_of_rotations: int = 1):
-        state = cls.__create_rotated(base, number_of_fock_states, 1, number_of_rotations)
+    def _create_local(cls, base, number_of_fock_states: int, number_of_parties: int = 1, number_of_rotations: int = 1):
+        state = cls._create_rotated(base, number_of_fock_states, 1, number_of_rotations)
         return qutip.tensor(*(state,) * number_of_parties)
 
     @classmethod
@@ -44,9 +46,8 @@ class QutipWrapper(qutip.Qobj):
         base = cls.creation_functions[name](number_of_fock_states, *args, **kwargs)
 
         if rotate_before_sum:
-            return cls.__create_local(base, number_of_fock_states, number_of_parties, number_of_rotations)
-        return cls.__create_rotated(base, number_of_fock_states, number_of_parties, number_of_rotations)
+            return cls._create_local(base, number_of_fock_states, number_of_parties, number_of_rotations)
+        return cls._create_rotated(base, number_of_fock_states, number_of_parties, number_of_rotations)
 
     def apply_operator(self, operator: qutip.Qobj):
         return self.__class__(operator * self * operator.inv())
-

@@ -19,15 +19,14 @@ class Simulation:
         self.initial_state_name = initial_state_name
         self.number_of_parity_sectors = number_of_parity_sectors
 
-        self.__initialize_states(*args, **kwargs)
+        self._get_states(*args, **kwargs)
 
-    def __initialize_states(self, *args, **kwargs):
-        self.initial_state = self.__create_initial_state(*args, **kwargs)
-        self.noisy_state = self.initial_state
-        self.__add_noise()
-        self.state_after_protocol = self.__run_protocol()
+    def _get_states(self, *args, **kwargs):
+        self.initial_state = self._create_initial_state(*args, **kwargs)
+        self._add_noise()
+        self.state_after_protocol = self._run_protocol()
 
-    def __create_initial_state(self, *args, **kwargs) -> State:
+    def _create_initial_state(self, *args, **kwargs) -> State:
         return State.create(
             name=self.initial_state_name,
             number_of_fock_states=self.number_of_fock_states,
@@ -37,10 +36,10 @@ class Simulation:
             *args,
             **kwargs)
 
-    def __add_noise(self):
+    def _add_noise(self):
         pass
 
-    def __run_protocol(self) -> State:
+    def _run_protocol(self) -> State:
         wigner_parity_operator = Operator.create(
             name='wigner-parity',
             number_of_fock_states=self.number_of_fock_states,

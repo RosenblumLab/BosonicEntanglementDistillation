@@ -7,8 +7,17 @@ from QutipWrapper import QutipWrapper
 
 
 class Operator(QutipWrapper):
+
     @staticmethod
-    def __create_angle_projection(
+    def _create_number(number_of_fock_states: int):
+        return qutip.num(number_of_fock_states)
+
+    @staticmethod
+    def _create_destroy(number_of_fock_states: int):
+        return qutip.destroy(number_of_fock_states)
+
+    @staticmethod
+    def _create_angle_projection(
             number_of_fock_states: int,
             number_of_parts: int,
             row: int = 0,
@@ -17,7 +26,7 @@ class Operator(QutipWrapper):
         operator = qutip.qzero(number_of_fock_states)
 
         for n, m in product(range(number_of_fock_states), repeat=2):
-            coefficient = Operator.__get_angle_projection_coefficient(
+            coefficient = Operator._get_angle_projection_coefficient(
                 n,
                 m,
                 number_of_parts,
@@ -30,7 +39,7 @@ class Operator(QutipWrapper):
         return operator
 
     @staticmethod
-    def __get_angle_projection_coefficient(
+    def _get_angle_projection_coefficient(
             n: int,
             m: int,
             number_of_parts: int,
@@ -45,16 +54,16 @@ class Operator(QutipWrapper):
         return coefficient
 
     @staticmethod
-    def __create_coherent_projection(number_of_fock_states: int, *args, **kwargs):
+    def _create_coherent_projection(number_of_fock_states: int, *args, **kwargs):
         return qutip.ket2dm(qutip.coherent(number_of_fock_states, *args, **kwargs))
 
     @staticmethod
-    def __create_rotation(number_of_fock_states: int, angle_in_radians: float):
+    def _create_rotation(number_of_fock_states: int, angle_in_radians: float):
         number_operator = qutip.num(number_of_fock_states)
         return (angle_in_radians * 1j * number_operator).expm()
 
     @staticmethod
-    def __create_wigner_parity(number_of_fock_states: int, number_of_rotated_parts: int):
+    def _create_wigner_parity(number_of_fock_states: int, number_of_rotated_parts: int):
         operator = qutip.qzero(number_of_fock_states)
 
         for i in range(0, number_of_rotated_parts, 2):
@@ -67,7 +76,7 @@ class Operator(QutipWrapper):
         return operator
 
     @staticmethod
-    def __create_fock_parity(number_of_fock_states: int, number_of_parties: int):
+    def _create_fock_parity(number_of_fock_states: int, number_of_parties: int):
         operator = qutip.tensor(*(qutip.qzero(number_of_fock_states), ) * number_of_parties)
 
         for i in range(0, number_of_fock_states, 2):
@@ -76,9 +85,11 @@ class Operator(QutipWrapper):
         return operator
 
     creation_functions = {
-            'angle projection': __create_angle_projection,
-            'coherent projection': __create_coherent_projection,
-            'rotation': __create_rotation,
-            'wigner-parity': __create_wigner_parity,
-            'fock-parity': __create_fock_parity
+        'number': _create_number,
+        'destroy': _create_destroy,
+        'angle projection': _create_angle_projection,
+        'coherent projection': _create_coherent_projection,
+        'rotation': _create_rotation,
+        'wigner-parity': _create_wigner_parity,
+        'fock-parity': _create_fock_parity
     }
