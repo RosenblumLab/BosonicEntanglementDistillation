@@ -6,6 +6,8 @@ from State import State
 from Operator import Operator
 from QutipWrapper import QutipWrapper
 
+from SimulationDiscreteErrorModel import SimulationDiscreteErrorModel
+
 from SimulationContinuousErrorModel import SimulationContinuousErrorModel
 from Simulation import Simulation
 
@@ -15,13 +17,11 @@ if __name__ == '__main__':
     number_of_rotations = 4
     initial_state_name = 'pegg-barnett'
 
-    simulation = SimulationContinuousErrorModel(
+    simulation = SimulationDiscreteErrorModel(
         number_of_fock_states=number_of_fock_states,
-        number_of_parties=number_of_parties,
         number_of_rotations=number_of_rotations,
         initial_state_name=initial_state_name,
-        kappa_decay=0.1,
-        kappa_dephase=0.1)
+        rotation_probability=0.05)
 
     fig, axes = plt.subplots(1, 3)
     fig.set_figwidth(14)
