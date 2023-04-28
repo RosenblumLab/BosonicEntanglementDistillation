@@ -63,15 +63,15 @@ class Operator(QutipWrapper):
         return (angle_in_radians * 1j * number_operator).expm()
 
     @staticmethod
-    def _create_wigner_parity(number_of_fock_states: int, number_of_rotated_parts: int):
+    def _create_wigner_parity(number_of_fock_states: int, number_of_parity_sectors: int):
         operator = qutip.qzero(number_of_fock_states)
 
-        for i in range(0, number_of_rotated_parts, 2):
+        for i in range(0, number_of_parity_sectors, 2):
             operator += Operator.create(
                 'angle projection',
                 number_of_fock_states=number_of_fock_states,
-                number_of_parts=number_of_rotated_parts,
-                center_angle_in_radians=2 * np.pi * i / number_of_rotated_parts)
+                number_of_parts=number_of_parity_sectors,
+                center_angle_in_radians=2 * np.pi * i / number_of_parity_sectors)
 
         return operator
 

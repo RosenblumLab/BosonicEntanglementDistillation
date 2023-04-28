@@ -23,6 +23,7 @@ class Simulation:
 
     def _get_states(self, *args, **kwargs):
         self.initial_state = self._create_initial_state(*args, **kwargs)
+        self.noisy_state = self.initial_state
         self._add_noise()
         self.state_after_protocol = self._run_protocol()
 
@@ -43,7 +44,7 @@ class Simulation:
         wigner_parity_operator = Operator.create(
             name='wigner-parity',
             number_of_fock_states=self.number_of_fock_states,
-            number_of_rotated_parts=self.number_of_parity_sectors,
-            number_of_parties=self.number_of_parties)
+            number_of_parties=self.number_of_parties,
+            number_of_parity_sectors=self.number_of_parity_sectors)
 
         return self.noisy_state.evaluate_operator(wigner_parity_operator)

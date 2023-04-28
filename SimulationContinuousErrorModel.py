@@ -41,7 +41,7 @@ class SimulationContinuousErrorModel(Simulation):
 
     def _get_collapse_operators(self) -> list[qutip.Qobj]:
         decay_base = np.sqrt(self.kappa_decay) * Operator.create('destroy', self.number_of_fock_states)
-        dephase_base = np.sqrt(self.kappa_dephase) * Operator.create('destroy', self.number_of_fock_states)
+        dephase_base = np.sqrt(self.kappa_dephase) * Operator.create('number', self.number_of_fock_states)
 
         collapse_operators = []
 
