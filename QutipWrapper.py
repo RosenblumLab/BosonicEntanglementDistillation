@@ -50,7 +50,7 @@ class QutipWrapper(qutip.Qobj):
         return cls._create_rotated(base, number_of_fock_states, number_of_parties, number_of_rotations)
 
     def apply_operator(self, operator: qutip.Qobj):
-        return self.__class__(operator * self * operator.inv())
+        return self.__class__(operator * self * operator.dag())
 
     @classmethod
     def tensor(cls, *args):
