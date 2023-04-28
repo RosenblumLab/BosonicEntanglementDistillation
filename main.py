@@ -2,7 +2,7 @@ import qutip
 import numpy as np
 import matplotlib.pyplot as plt
 
-from SimulationContinuousErrorModel import SimulationContinuousErrorModel
+from SimulationDiscreteErrorModel import SimulationDiscreteErrorModel
 
 if __name__ == '__main__':
     number_of_fock_states = 30
@@ -11,21 +11,11 @@ if __name__ == '__main__':
     number_of_parts_to_decode = 2
     initial_state_name = 'pegg-barnett'
 
-    reference_state = np.zeros(
-       [number_of_parts_to_decode ** number_of_parties, number_of_parts_to_decode ** number_of_parties])
-    reference_state[0, 0] = 0.5
-    reference_state[-1, -1] = 0.5
-    reference_state[0, -1] = 0.5
-    reference_state[-1, 0] = 0.5
-    reference_state = qutip.Qobj(reference_state)
-
-    simulation = SimulationContinuousErrorModel(
+    simulation = SimulationDiscreteErrorModel(
        number_of_fock_states=number_of_fock_states,
        number_of_rotations=number_of_rotations,
-       number_of_parties=number_of_parties,
        initial_state_name=initial_state_name,
-       kappa_dephase=0.1,
-       kappa_decay=0.1)
+       rotation_probability=0)
 
     fig, axes = plt.subplots(1, 2)
     fig.set_figwidth(10)
@@ -33,6 +23,6 @@ if __name__ == '__main__':
 
     qutip.plot_wigner(simulation.initial_state.ptrace(0), fig, axes[0], colorbar=True)
 
-    qutip.plot_wigner(simulation.noisy_state.ptrace(0), fig, axes[1], colorbar=True)
+    qutip.plot_wigner(simulation.state_after_protocol.ptrace(0), fig, axes[1], colorbar=True)
 
     plt.show()
