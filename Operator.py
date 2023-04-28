@@ -77,10 +77,10 @@ class Operator(QutipWrapper):
 
     @staticmethod
     def _create_fock_parity(number_of_fock_states: int, number_of_parties: int):
-        operator = qutip.tensor(*(qutip.qzero(number_of_fock_states), ) * number_of_parties)
+        operator = QutipWrapper.repeat(number_of_fock_states, number_of_parties)
 
         for i in range(0, number_of_fock_states, 2):
-            operator += qutip.tensor(*(qutip.ket2dm(qutip.basis(number_of_fock_states, i)), ) * number_of_parties)
+            operator += QutipWrapper.repeat(qutip.ket2dm(qutip.basis(number_of_fock_states, i)), number_of_parties)
 
         return operator
 

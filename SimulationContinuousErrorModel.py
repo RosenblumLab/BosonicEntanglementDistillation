@@ -4,6 +4,7 @@ import numpy as np
 from State import State
 from Operator import Operator
 from Simulation import Simulation
+from QutipWrapper import QutipWrapper
 
 
 class SimulationContinuousErrorModel(Simulation):
@@ -36,7 +37,7 @@ class SimulationContinuousErrorModel(Simulation):
                         * [qutip.qeye(self.number_of_fock_states)] \
                         + [noise_operator] \
                         + (self.number_of_parties - index - 1) * [qutip.qeye(self.number_of_fock_states)]
-        return qutip.tensor(operator_list)
+        return QutipWrapper.tensor(operator_list)
 
     def _get_collapse_operators(self) -> list[qutip.Qobj]:
         decay_base = np.sqrt(self.kappa_decay) * Operator.create('destroy', self.number_of_fock_states)
@@ -54,8 +55,7 @@ class SimulationContinuousErrorModel(Simulation):
     def _solve_master_equation(self, t_list: list[float] = [0, 1]) -> State:
         collapse_operators = self._get_collapse_operators()
 
-        hamiltonian = qutip.tensor(
-            [qutip.qzero(self.number_of_fock_states)] * self.number_of_parties)
+        hamiltonian = QutipWrapper.repeat(qutip.qzero(self.number_of_fock_states), self.number_of_parties)
 
         return State.mesolve(hamiltonian, self.initial_state, t_list, collapse_operators)
 

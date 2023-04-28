@@ -18,19 +18,19 @@ class QutipWrapper(qutip.Qobj):
             number_of_rotations: int = 1):
 
         number_operator = qutip.num(number_of_fock_states)
-        state = qutip.tensor(*(base,) * number_of_parties)
+        state = cls.repeat(base, number_of_parties)
 
         for i in range(1, number_of_rotations):
             rotated_base = cls.apply_operator(
                 base,
                 (2 * np.pi * i * 1j / number_of_rotations * number_operator).expm())
-            state += qutip.tensor(*(rotated_base,) * number_of_parties)
+            state += cls.repeat(rotated_base, number_of_parties)
         return state
 
     @classmethod
     def _create_local(cls, base, number_of_fock_states: int, number_of_parties: int = 1, number_of_rotations: int = 1):
         state = cls._create_rotated(base, number_of_fock_states, 1, number_of_rotations)
-        return qutip.tensor(*(state,) * number_of_parties)
+        return cls.repeat(state, number_of_parties)
 
     @classmethod
     def create(
@@ -51,3 +51,11 @@ class QutipWrapper(qutip.Qobj):
 
     def apply_operator(self, operator: qutip.Qobj):
         return self.__class__(operator * self * operator.inv())
+
+    @classmethod
+    def tensor(cls, qutip_object_list: list(QutipWrapper)):
+        return qutip.tensor(qutip_object_list)
+
+    @classmethod
+    def repeat(cls, base: QutipWrapper, repetitions: int):
+        return qutip.tensor(*(base,) * repetitions)
