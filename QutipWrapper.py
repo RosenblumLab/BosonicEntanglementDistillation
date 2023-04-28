@@ -53,8 +53,8 @@ class QutipWrapper(qutip.Qobj):
         return self.__class__(operator * self * operator.inv())
 
     @classmethod
-    def tensor(cls, qutip_object_list: list(QutipWrapper)):
-        return qutip.tensor(qutip_object_list)
+    def tensor(cls, *args):
+        return qutip.tensor(*args)
 
     @classmethod
     def repeat(cls, base: QutipWrapper, repetitions: int):
