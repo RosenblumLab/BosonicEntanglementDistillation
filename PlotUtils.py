@@ -12,10 +12,10 @@ class PlotUtils:
         fig.set_figheight(4)
 
         qutip.plot_wigner(initial_state, fig, axes[0], colorbar=True)
-        PlotUtils.edit_graph(axes[0], "<Q>", "<P>", "Before")
+        PlotUtils.edit_graph(axes[0], '<Q>', '<P>', "Before")
 
         qutip.plot_wigner(new_state, fig, axes[1], colorbar=True)
-        PlotUtils.edit_graph(axes[1], "<Q>", "<P>", "After")
+        PlotUtils.edit_graph(axes[1], '<Q>', '<P>', "After")
 
         plt.show()
 
@@ -37,4 +37,4 @@ class PlotUtils:
             axes.set_title(title, fontsize=TITLE_FONT_SIZE)
 
         if legend is not None:
-            axes.legend(legend, loc="upper left", fontsize=LEGEND_FONT_SIZE)
+            axes.legend(legend, loc='upper left', fontsize=LEGEND_FONT_SIZE)

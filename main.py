@@ -29,19 +29,8 @@ if __name__ == '__main__':
     reference_state[-1, 0] = 0.5
     reference_state = qutip.Qobj(reference_state)
 
-    decoded_state_before_protocol = DecodeUtils.decode(
-        simulation.noisy_state,
-        number_of_fock_states=number_of_fock_states,
-        number_of_parties=number_of_parties,
-        number_of_parts=number_of_parts_to_decode,
-        center_angle_in_radians=np.pi/4)
-
     decoded_state_after_protocol = DecodeUtils.decode(
         simulation.state_after_protocol,
         number_of_fock_states=number_of_fock_states,
         number_of_parties=number_of_parties,
         number_of_parts=number_of_parts_to_decode)
-
-    fidelity_before_protocol = qutip.fidelity(reference_state, decoded_state_before_protocol)
-    fidelity_after_protocol = qutip.fidelity(reference_state, decoded_state_after_protocol)
-    print("Fidelity before: " + str(fidelity_before_protocol) + " Fidelity after: " + str(fidelity_after_protocol))
