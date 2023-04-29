@@ -1,37 +1,52 @@
 import qutip
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-from State import State
-from Operator import Operator
-from QutipWrapper import QutipWrapper
-
-from SimulationDiscreteErrorModel import SimulationDiscreteErrorModel
-
+from DecodeUtils import DecodeUtils
 from SimulationContinuousErrorModel import SimulationContinuousErrorModel
-from Simulation import Simulation
 
 if __name__ == '__main__':
     number_of_fock_states = 30
     number_of_parties = 2
     number_of_rotations = 4
     initial_state_name = 'pegg-barnett'
+    number_of_parts_to_decode = 2
 
-    simulation = SimulationDiscreteErrorModel(
+    simulation = SimulationContinuousErrorModel(
         number_of_fock_states=number_of_fock_states,
         number_of_rotations=number_of_rotations,
         initial_state_name=initial_state_name,
-        rotation_probability=0.05)
+        number_of_parties=number_of_parties,
+        kappa_dephase=0,
+        kappa_decay=0.5)
 
-    fig, axes = plt.subplots(1, 3)
-    fig.set_figwidth(14)
-    fig.set_figheight(4)
+    reference_state = np.zeros(
+        [number_of_parts_to_decode ** number_of_parties, number_of_parts_to_decode ** number_of_parties])
+    reference_state[0, 0] = 0.5
+    reference_state[-1, -1] = 0.5
+    reference_state[0, -1] = 0.5
+    reference_state[-1, 0] = 0.5
+    reference_state = qutip.Qobj(reference_state)
 
-    qutip.plot_wigner(simulation.initial_state.ptrace(0), fig, axes[0], colorbar=True)
+    decoded_state_before_protocol = DecodeUtils.decode(
+        simulation.noisy_state,
+        number_of_fock_states=number_of_fock_states,
+        number_of_parties=number_of_parties,
+        number_of_parts=number_of_parts_to_decode,
+        center_angle_in_radians=np.pi/4)
 
-    qutip.plot_wigner(simulation.noisy_state.ptrace(0), fig, axes[1], colorbar=True)
+    decoded_state_after_protocol = DecodeUtils.decode(
+        simulation.state_after_protocol,
+        number_of_fock_states=number_of_fock_states,
+        number_of_parties=number_of_parties,
+        number_of_parts=number_of_parts_to_decode)
 
-    qutip.plot_wigner(simulation.state_after_protocol.ptrace(0), fig, axes[2], colorbar=True)
+    fidelity_before_protocol = qutip.fidelity(reference_state, decoded_state_before_protocol)
+    fidelity_after_protocol = qutip.fidelity(reference_state, decoded_state_after_protocol)
+    print("Fidelity before: " + str(fidelity_before_protocol) + " Fidelity after: " + str(fidelity_after_protocol))
+
+
 
 
     plt.show()

@@ -41,7 +41,7 @@ class DecodeUtils:
 
         for rows in itertools.product(range(number_of_parts), repeat=number_of_parties):
             for cols in itertools.product(range(number_of_parts), repeat=number_of_parties):
-                operator_list = DecodeUtils.__create_operator_list(
+                operator_list = DecodeUtils._create_operator_list(
                     rows,
                     cols,
                     number_of_fock_states,
