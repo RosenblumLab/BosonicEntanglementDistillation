@@ -17,6 +17,14 @@ class Operator(QutipWrapper):
         return qutip.destroy(number_of_fock_states)
 
     @staticmethod
+    def _create_identity(number_of_fock_states: int):
+        return qutip.qeye(number_of_fock_states)
+
+    @staticmethod
+    def _create_zero(number_of_fock_states: int):
+        return qutip.qzero(number_of_fock_states)
+
+    @staticmethod
     def _create_angle_projection(
             number_of_fock_states: int,
             number_of_parts: int,
@@ -87,6 +95,8 @@ class Operator(QutipWrapper):
     creation_functions = {
         'number': _create_number,
         'destroy': _create_destroy,
+        'identity': _create_identity,
+        'zero': _create_zero,
         'angle-projection': _create_angle_projection,
         'coherent-projection': _create_coherent_projection,
         'rotation': _create_rotation,

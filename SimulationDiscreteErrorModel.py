@@ -30,13 +30,11 @@ class SimulationDiscreteErrorModel(Simulation):
         rotation_operator_base = Operator.create('rotation',
                                                  self.number_of_fock_states,
                                                  angle_in_radians=2 * np.pi / self.number_of_rotations)
+        identity = Operator.create('identity', number_of_fock_states=self.number_of_fock_states)
 
-        phi_minus = self.initial_state.apply_operator(
-            QutipWrapper.tensor(rotation_operator_base, qutip.qeye(self.number_of_fock_states)))
-        phi_plus = self.initial_state.apply_operator(
-            QutipWrapper.tensor(qutip.qeye(self.number_of_fock_states), rotation_operator_base))
-        phi_2 = self.initial_state.apply_operator(
-            QutipWrapper.tensor(rotation_operator_base ** 2, qutip.qeye(self.number_of_fock_states)))
+        phi_minus = self.initial_state.apply_operator(QutipWrapper.tensor(rotation_operator_base, identity))
+        phi_plus = self.initial_state.apply_operator(QutipWrapper.tensor(identity, rotation_operator_base))
+        phi_2 = self.initial_state.apply_operator(QutipWrapper.tensor(rotation_operator_base ** 2, identity))
 
         self.noisy_state = State((1 - 2 * self.rotation_probability - self.rotation_probability ** 2)
                                  * qutip.ket2dm(self.initial_state)

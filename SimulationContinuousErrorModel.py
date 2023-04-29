@@ -32,14 +32,15 @@ class SimulationContinuousErrorModel(Simulation):
             *args,
             **kwargs)
 
-    def _get_indexed_collapse_operator(self, noise_operator: qutip.Qobj, index: int) -> qutip.Qobj:
+    def _get_indexed_collapse_operator(self, noise_operator: Operator, index: int) -> Operator:
         operator_list = index \
-                        * [qutip.qeye(self.number_of_fock_states)] \
+                        * [Operator.create('identity', self.number_of_fock_states)] \
                         + [noise_operator] \
-                        + (self.number_of_parties - index - 1) * [qutip.qeye(self.number_of_fock_states)]
+                        + (self.number_of_parties - index - 1) \
+                        * [Operator.create('identity', self.number_of_fock_states)]
         return QutipWrapper.tensor(operator_list)
 
-    def _get_collapse_operators(self) -> list[qutip.Qobj]:
+    def _get_collapse_operators(self) -> list[Operator]:
         decay_base = np.sqrt(self.kappa_decay) * Operator.create('destroy', self.number_of_fock_states)
         dephase_base = np.sqrt(self.kappa_dephase) * Operator.create('number', self.number_of_fock_states)
 
@@ -55,7 +56,10 @@ class SimulationContinuousErrorModel(Simulation):
     def _solve_master_equation(self, t_list: list[float] = [0, 1]) -> State:
         collapse_operators = self._get_collapse_operators()
 
-        hamiltonian = QutipWrapper.repeat(qutip.qzero(self.number_of_fock_states), self.number_of_parties)
+        hamiltonian = Operator.create(
+            'zero',
+            number_of_fock_states=self.number_of_fock_states,
+            number_of_parties=self.number_of_parties)
 
         return State.mesolve(hamiltonian, self.initial_state, t_list, collapse_operators)
 

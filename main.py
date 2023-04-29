@@ -45,8 +45,3 @@ if __name__ == '__main__':
     fidelity_before_protocol = qutip.fidelity(reference_state, decoded_state_before_protocol)
     fidelity_after_protocol = qutip.fidelity(reference_state, decoded_state_after_protocol)
     print("Fidelity before: " + str(fidelity_before_protocol) + " Fidelity after: " + str(fidelity_after_protocol))
-
-
-
-
-    plt.show()
