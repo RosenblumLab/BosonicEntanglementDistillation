@@ -68,7 +68,7 @@ class Operator(QutipWrapper):
 
         for i in range(0, number_of_parity_sectors, 2):
             operator += Operator.create(
-                'angle projection',
+                'angle-projection',
                 number_of_fock_states=number_of_fock_states,
                 number_of_parts=number_of_parity_sectors,
                 center_angle_in_radians=2 * np.pi * i / number_of_parity_sectors)
@@ -87,8 +87,8 @@ class Operator(QutipWrapper):
     creation_functions = {
         'number': _create_number,
         'destroy': _create_destroy,
-        'angle projection': _create_angle_projection,
-        'coherent projection': _create_coherent_projection,
+        'angle-projection': _create_angle_projection,
+        'coherent-projection': _create_coherent_projection,
         'rotation': _create_rotation,
         'wigner-parity': _create_wigner_parity,
         'fock-parity': _create_fock_parity
