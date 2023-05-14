@@ -2,3 +2,4 @@
 .idea/BosonicEntanglementDistillation.iml
 .idea/inspectionProfiles/profiles_settings.xml
 *.xml
+*.pyc
