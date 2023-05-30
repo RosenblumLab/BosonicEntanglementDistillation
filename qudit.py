@@ -90,6 +90,8 @@ class Qudit:
         :param loss_times: how many losses have been
         :return: p^(l=l)
         """
+        if loss_times < 0 or loss_times >= self.d:
+            return 0
         return gamma_loss**loss_times/np.math.factorial(loss_times) * (1-gamma_loss)**(alpha**2)
         # return stats.binom.pmf(l, self.d, gamma_loss)
 
@@ -163,12 +165,12 @@ class EntangledQudit:
                                       ) for u in range(m_c)]
         u_B = max(dephasing_prob_tuple_list, key= lambda x: x[1])[0]
         good_s_A_B_list = [(s_A, s_B) for s_A, s_B in itertools.product(s_A_list, s_B_list)
-                           if (s_A-s_B)%self.d_A == (min([(A_1-B_1)-i * Delta_c for i in range(-1, 2)], key=abs)
-                                                     % self.d_A)]
-        good_s_A_B_list2 = [(s_A, s_B) for s_A, s_B in itertools.product(s_A_list, s_B_list)
                            if (s_A - s_B)%self.d_A == (A_1 - B_1 + u_B * Delta_c)%self.d_A]
-        if good_s_A_B_list2!=good_s_A_B_list:
-            print("ahhhhaaa")
+        # this is the other way to do it, that has errors in it
+        # good_s_A_B_list = [(s_A, s_B) for s_A, s_B in itertools.product(s_A_list, s_B_list)
+        #                    if (s_A-s_B)%self.d_A == (min([(A_1-B_1)-i * Delta_c for i in range(-1, 2)], key=abs)
+        #                                              % self.d_A)]
+
         # print(f"{s_A_B_list=}")
         # print(f"{good_s_A_B_list=}")
 
@@ -178,8 +180,17 @@ class EntangledQudit:
 
         l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
                       if ((l_A+l_B) % int(m_c/2)) == (-(A_2+B_2) % int(m_c/2))]
+        loss_prob_tuple_list = [(v,
+                                 sum([self.quditA.p_loss(gamma_loss_A, m_c/2 - A_2 + t)
+                                      * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c / 2 - B_2 - t + j * m_c)
+                                      for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),
+                                                                    range(-int(Delta_c/2), int(Delta_c/2)))])
+                                 ) for v in range(2)]
+        v_B = max(loss_prob_tuple_list, key=lambda x: x[1])[0]
         good_l_A_B_list = [(l_A, l_B) for l_A, l_B in l_A_B_list
                            if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
+        good_l_A_B_list2 = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
+                           if (l_A + l_B) % m_c == (- A_2 - B_2 + v_B * m_c / 2) % m_c]
 
         if magic_state:
             l_A_list = [m_c/2 - A_2, m_c-A_2]
@@ -201,6 +212,8 @@ class EntangledQudit:
                              s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
                   for s_A, s_B in s_A_B_list
                   for l_A, l_B in l_A_B_list}
+        if not set(good_l_A_B_list).issubset(set(good_l_A_B_list2)):
+            print("ahhhhaaa")
         return sum(good_p_list)/sum(p_list)
         # numerator = sum([])
 
