@@ -128,7 +128,7 @@ class EntangledQudit:
                 self.quditA.p_loss(gamma_loss_A, l_A) * self.quditB.p_loss(gamma_loss_B, l_B))
 
     def fidelity_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A,
-                          gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False):
+                          gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False, no_com=False):
         """
         Calculates the fidelity for specific results A_1, A_2, B_1, B_2.
         We need to write all the possible dephasing errors and loss errors, and calculate the possible probabilities.
@@ -157,13 +157,19 @@ class EntangledQudit:
         s_B_list = [B_1 + i * Delta_i for i in range(int(-m_i/2), int(m_i/2))]
         s_A_B_list = [(s_A, s_B) for s_A, s_B in itertools.product(s_A_list, s_B_list)
                       if ((s_A-s_B) % Delta_c) == ((A_1-B_1) % Delta_c)]
-        # here we are searching for the best rotation for bob. it might be computationally intensive.
-        dephasing_prob_tuple_list = [(u,
-                                     sum([self.quditA.p_dephasing(gamma_dephasing_A, A_1 + t * Delta_i)
-                                          * self.quditB.p_dephasing(gamma_dephasing_B, B_1 + t * Delta_i - u * Delta_c)
-                                         for t in range(m_i)])
-                                      ) for u in range(m_c)]
-        u_B = max(dephasing_prob_tuple_list, key= lambda x: x[1])[0]
+        if not no_com:
+            # here we are searching for the best rotation for bob. it might be computationally intensive.
+            dephasing_prob_tuple_list = [(u,
+                                         sum([self.quditA.p_dephasing(gamma_dephasing_A, A_1 + t * Delta_i)
+                                              * self.quditB.p_dephasing(gamma_dephasing_B,
+                                                                        B_1 + t * Delta_i - u * Delta_c)
+                                             for t in range(m_i)])
+                                          ) for u in range(m_c)]
+            u_B = max(dephasing_prob_tuple_list, key= lambda x: x[1])[0]
+        else:
+            x_A = A_1 if A_1 < (Delta_c-Delta_i/2) else A_1-Delta_c
+            x_B = B_1 if B_1 < (Delta_c-Delta_i/2) else B_1-Delta_c
+            u_B = (x_A - A_1 - x_B + B_1)/Delta_c
         good_s_A_B_list = [(s_A, s_B) for s_A, s_B in itertools.product(s_A_list, s_B_list)
                            if (s_A - s_B)%self.d_A == (A_1 - B_1 + u_B * Delta_c)%self.d_A]
         # this is the other way to do it, that has errors in it
@@ -180,16 +186,21 @@ class EntangledQudit:
 
         l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
                       if ((l_A+l_B) % int(m_c/2)) == (-(A_2+B_2) % int(m_c/2))]
-        loss_prob_tuple_list = [(v,
-                                 sum([self.quditA.p_loss(gamma_loss_A, m_c/2 - A_2 + t)
-                                      * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c / 2 - B_2 - t + j * m_c)
-                                      for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),
-                                                                    range(-int(Delta_c/2), int(Delta_c/2)))])
-                                 ) for v in range(2)]
-        v_B = max(loss_prob_tuple_list, key=lambda x: x[1])[0]
-        good_l_A_B_list = [(l_A, l_B) for l_A, l_B in l_A_B_list
-                           if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
-        good_l_A_B_list2 = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
+        if not no_com:
+            loss_prob_tuple_list = [(v,
+                                     sum([self.quditA.p_loss(gamma_loss_A, m_c/2 - A_2 + t)
+                                          * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c / 2 - B_2 - t + j * m_c)
+                                          for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),
+                                                                        range(-int(Delta_c/2), int(Delta_c/2)))])
+                                     ) for v in range(2)]
+            v_B = max(loss_prob_tuple_list, key=lambda x: x[1])[0]
+        else:
+            y_A = A_2
+            y_B = B_2
+            v_B = (y_A-y_B) / (m_c/2)
+        # good_l_A_B_list = [(l_A, l_B) for l_A, l_B in l_A_B_list
+        #                    if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
+        good_l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
                            if (l_A + l_B) % m_c == (- A_2 - B_2 + v_B * m_c / 2) % m_c]
 
         if magic_state:
@@ -212,8 +223,8 @@ class EntangledQudit:
                              s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
                   for s_A, s_B in s_A_B_list
                   for l_A, l_B in l_A_B_list}
-        if not set(good_l_A_B_list).issubset(set(good_l_A_B_list2)):
-            print("ahhhhaaa")
+        # if not set(good_l_A_B_list).issubset(set(good_l_A_B_list2)):
+        #     print("ahhhhaaa")
         return sum(good_p_list)/sum(p_list)
         # numerator = sum([])
 

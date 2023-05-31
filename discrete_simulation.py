@@ -12,7 +12,7 @@ class DiscreteSimulation:
         self.magic = magic
         self.enQudit = EntangledQudit(d, d)
 
-    def average_fidelity(self, gamma_loss, gamma_dephasing, fidelity_cut=0):
+    def average_fidelity(self, gamma_loss, gamma_dephasing, fidelity_cut=0, **kwargs):
         fidelity_sum = 0
         prob_sum = 0
         good_prob = 0
@@ -22,7 +22,7 @@ class DiscreteSimulation:
                                                     range(int(self.m_c / 2))):  # , total = int(d/2*d/2)):
             fid = self.enQudit.fidelity_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing, A_1=A_1,
                                                  B_1=B_1, A_2=A_2,
-                                                 B_2=B_2, m_i=self.m_i, m_c=self.m_c, magic_state=self.magic)
+                                                 B_2=B_2, m_i=self.m_i, m_c=self.m_c, magic_state=self.magic, **kwargs)
             prob = self.enQudit.probability_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing,
                                                      A_1=A_1, B_1=B_1,
                                                      A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c,
@@ -39,6 +39,8 @@ class DiscreteSimulation:
         fail_probability = (prob_sum - good_prob) / prob_sum
         return average_fid, fail_probability
 
+    def average_fidelity_no_communication(self, gamma_loss, gamma_dephasing):
+        return self.average_fidelity(gamma_loss, gamma_dephasing, fidelity_cut=0, no_com=True)
 
     def average_fidelity_local_filter(self, gamma_loss, gamma_dephasing, fidelity_cut=0, prob_cut=0):
         fidelity_sum = 0
