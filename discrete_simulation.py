@@ -42,6 +42,19 @@ class DiscreteSimulation:
     def average_fidelity_no_communication(self, gamma_loss, gamma_dephasing):
         return self.average_fidelity(gamma_loss, gamma_dephasing, fidelity_cut=0, no_com=True)
 
+    def probability_sum(self, gamma_loss, gamma_dephasing):
+        prob_sum = 0
+        for A_1, B_1, A_2, B_2 in itertools.product(range(int(self.d / self.m_c)), range(int(self.d / self.m_c)),
+                                                    range(int(self.m_c / 2)),
+                                                    range(int(self.m_c / 2))):  # , total = int(d/2*d/2)):
+            prob = self.enQudit.probability_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing,
+                                                     A_1=A_1, B_1=B_1,
+                                                     A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c,
+                                                     magic_state=self.magic)
+            prob_sum += prob
+        return prob_sum
+
+
     def average_fidelity_local_filter(self, gamma_loss, gamma_dephasing, fidelity_cut=0, prob_cut=0):
         fidelity_sum = 0
         prob_sum = 0
