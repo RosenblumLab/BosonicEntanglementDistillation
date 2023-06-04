@@ -197,7 +197,7 @@ class EntangledQudit:
                                      sum([self.quditA.p_loss(gamma_loss_A, m_c/2 - A_2 + t)
                                           * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c / 2 - B_2 - t + j * m_c)
                                           for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),
-                                                                        range(-int(Delta_c/2), int(Delta_c/2)))])
+                                                                        range(-int(Delta_c), int(Delta_c)))])
                                      ) for v in range(2)]
             v_B = max(loss_prob_tuple_list, key=lambda x: x[1])[0]
         else:
