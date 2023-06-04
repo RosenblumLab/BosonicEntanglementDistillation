@@ -3,3 +3,5 @@
 .idea/inspectionProfiles/profiles_settings.xml
 *.xml
 *.pyc
+*.pyc
+.ipynb_checkpoints/playground2-checkpoint.ipynb
