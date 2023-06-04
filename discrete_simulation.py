@@ -43,6 +43,12 @@ class DiscreteSimulation:
         return self.average_fidelity(gamma_loss, gamma_dephasing, fidelity_cut=0, no_com=True)
 
     def probability_sum(self, gamma_loss, gamma_dephasing):
+        """
+        Notice that this function gives back p_total * m_i/m_f because of the collapse.
+        :param gamma_loss: gamma loss
+        :param gamma_dephasing: gamma dephasing
+        :return:
+        """
         prob_sum = 0
         for A_1, B_1, A_2, B_2 in itertools.product(range(int(self.d / self.m_c)), range(int(self.d / self.m_c)),
                                                     range(int(self.m_c / 2)),
@@ -52,7 +58,7 @@ class DiscreteSimulation:
                                                      A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c,
                                                      magic_state=self.magic)
             prob_sum += prob
-        return prob_sum
+        return prob_sum / (self.m_i/2)
 
 
     def average_fidelity_local_filter(self, gamma_loss, gamma_dephasing, fidelity_cut=0, prob_cut=0):

@@ -2,6 +2,8 @@ import itertools
 from qutip import *
 import numpy as np
 from scipy.special import erf
+from functools import lru_cache
+
 from scipy import stats
 
 
@@ -82,6 +84,7 @@ class Qudit:
     def __init__(self,d):
         self.d = d
 
+    @lru_cache(maxsize=None)
     def p_loss(self, gamma_loss, loss_times, alpha=0):
         """
         compute probability for loss.
@@ -95,6 +98,7 @@ class Qudit:
         return gamma_loss**loss_times/np.math.factorial(loss_times) * (1-gamma_loss)**(alpha**2)
         # return stats.binom.pmf(l, self.d, gamma_loss)
 
+    @lru_cache(maxsize=None)
     def p_dephasing(self, gamma_dephasing, s):
         if s > (self.d / 2):
             s = s - self.d
@@ -119,6 +123,7 @@ class EntangledQudit:
         '''
         return sum([tup[0]*self.dit(tup[1], tup[2]) for tup in digitList]).unit()
 
+    @lru_cache(maxsize=None)
     def p(self, gamma_loss_A, gamma_dephasing_A, s_A,s_B,l_A,l_B, gamma_loss_B=None, gamma_dephasing_B=None):
         if gamma_loss_B is None:
             gamma_loss_B = gamma_loss_A
@@ -127,6 +132,7 @@ class EntangledQudit:
         return (self.quditA.p_dephasing(gamma_dephasing_A, s_A) * self.quditB.p_dephasing(gamma_dephasing_B, s_B) *
                 self.quditA.p_loss(gamma_loss_A, l_A) * self.quditB.p_loss(gamma_loss_B, l_B))
 
+    @lru_cache(maxsize=None)
     def fidelity_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A,
                           gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False, no_com=False):
         """
@@ -228,6 +234,7 @@ class EntangledQudit:
         return sum(good_p_list)/sum(p_list)
         # numerator = sum([])
 
+    @lru_cache(maxsize=None)
     def probability_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A,
                           gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False):
         """
