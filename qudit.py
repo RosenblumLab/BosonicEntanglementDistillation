@@ -85,7 +85,7 @@ class Qudit:
         self.d = d
 
     @lru_cache(maxsize=None)
-    def p_loss(self, gamma_loss, loss_times, alpha=0):
+    def p_loss(self, gamma_loss: float, loss_times: int, alpha=0):
         """
         compute probability for loss.
         :param alpha:
@@ -224,11 +224,11 @@ class EntangledQudit:
                               s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
                        for s_A, s_B in good_s_A_B_list
                        for l_A, l_B in good_l_A_B_list]
-        p_dict = {f"{s_A}, {s_B}, {l_A}, {l_B}":
-                      self.p(gamma_loss_A=gamma_loss_A, gamma_dephasing_A = gamma_dephasing_A,
-                             s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
-                  for s_A, s_B in s_A_B_list
-                  for l_A, l_B in l_A_B_list}
+        # p_dict = {f"{s_A}, {s_B}, {l_A}, {l_B}":
+        #               self.p(gamma_loss_A=gamma_loss_A, gamma_dephasing_A = gamma_dephasing_A,
+        #                      s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
+        #           for s_A, s_B in s_A_B_list
+        #           for l_A, l_B in l_A_B_list}
         # if not set(good_l_A_B_list).issubset(set(good_l_A_B_list2)):
         #     print("ahhhhaaa")
         return sum(good_p_list)/sum(p_list)
@@ -294,7 +294,7 @@ class EntangledQudit:
         # print(traced_state)
         # compare to a bell state
         bell_state = (tensor(basis(2, 0), basis(2, 0)) + tensor(basis(2, 1), basis(2, 1))).unit()
-        return fidelity(traced_state, ket2dm(bell_state).unit())
+        return (fidelity(traced_state, ket2dm(bell_state).unit()))**2
 
     def transform_to_fourier_basis(self, qudit: Qobj, reverse=False):
         plus_basis_list1 = []
