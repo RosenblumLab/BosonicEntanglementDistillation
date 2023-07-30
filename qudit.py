@@ -6,15 +6,17 @@ from functools import lru_cache
 
 from scipy import stats
 
-
-
 class BosonicQudit:
-    def __init__(self, N, d, res=1000):
+    def __init__(self, N, d, res=1000, base_state_list=None):
         self.N = N
         self.d = d
         self.res = res
         self.proj_op_list = self.create_proj_list()
-        self.basis_dict, self.phi_list = self.create_basis_dictionary(self.res)
+        if base_state_list is None:
+            pegg_bernet_0 = 1 / np.sqrt(N) * sum([basis(N, i) for i in range(N)])
+            rotation = lambda x: (x * 1.0j * num(N)).expm()
+            base_state_list = [rotation(2 * i * np.pi / d) * pegg_bernet_0 for i in range(d)]
+        self.basis_dict, self.phi_list = self.create_basis_dictionary(self.res, base_state_list)
 
     def cavity_to_qudit(self, rho):
         """
@@ -42,7 +44,7 @@ class BosonicQudit:
             op_list.append(proj)
         return op_list
 
-    def create_basis_dictionary(self, res):
+    def create_basis_dictionary(self, res, base_state_list):
         """
         creates a dictionary that gets a tuple (i,phi) and returns the relevant vector
         :res: the resolution in which we work at
@@ -50,16 +52,25 @@ class BosonicQudit:
         """
         N = self.N
         d = self.d
-        pegg_bernet_0 = 1 / np.sqrt(N) * sum([basis(N, i) for i in range(N)])
+        assert(len(base_state_list) == d)
+
         rotation = lambda x: (x * 1.0j * num(N)).expm()
         phi_minus = -np.pi/d
         phi_plus = np.pi/d
         phi_list = np.linspace(phi_minus, phi_plus, res)
         basis_dict = {}
-        for i in range(d):
+        for i, base_state in enumerate(base_state_list):
             for phi in phi_list:
-                basis_dict[(i, phi)] = (rotation(2 * i * np.pi / d) * rotation(phi) * pegg_bernet_0).unit()
+                basis_dict[(i, phi)] = (rotation(phi) * base_state).unit()
         return basis_dict, phi_list
+
+    def qudit_to_qubit(self, sigma_dit):
+        N = self.N
+        d = self.d
+        sigma_bit = np.zeros([2, 2])
+        for i, j in itertools.product(range(2), range(2)):
+            sigma_bit[i, j] = sum([basis(d, int(i*d/2 + t)).dag() * sigma_dit * basis(d, int(j*d/2 + t)) for t in range(int(d/2))])[0][0][0]
+        return Qobj(sigma_bit).unit()
 
 
 class EntangledBosonicQudit:
