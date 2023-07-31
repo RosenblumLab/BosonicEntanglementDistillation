@@ -5,3 +5,8 @@
 *.pyc
 *.pyc
 .ipynb_checkpoints/playground2-checkpoint.ipynb
+.ipynb_checkpoints/discrete_simulation-checkpoint.py
+.ipynb_checkpoints/distillation_first_simulation-checkpoint.ipynb
+.ipynb_checkpoints/entanglement_distillation_playground_1-checkpoint.ipynb
+*.pyc
+.ipynb_checkpoints/entanglement_distillation_playground_1-checkpoint.ipynb
