@@ -65,18 +65,28 @@ class BosonicQudit:
         return basis_dict, phi_list
 
     def qudit_to_qubit(self, sigma_dit):
-        N = self.N
         d = self.d
-        sigma_bit = np.zeros([2, 2])
-        for i, j in itertools.product(range(2), range(2)):
-            sigma_bit[i, j] = sum([basis(d, int(i*d/2 + t)).dag() * sigma_dit * basis(d, int(j*d/2 + t)) for t in range(int(d/2))])[0][0][0]
-        return Qobj(sigma_bit).unit()
+        # this is the right way to do it
+        sigma_dit.dims = [[2, d / 2], [2, d / 2]]
+        return sigma_dit.ptrace(0)
+        #
+        # sigma_bit = np.zeros([2, 2])
+        # for i, j in itertools.product(range(2), range(2)):
+        #     sigma_bit[i, j] = sum([basis(d, int(i*d/2 + t)).dag() * sigma_dit * basis(d, int(j*d/2 + t)) for t in range(int(d/2))])[0][0][0]
+        # return Qobj(sigma_bit).unit()
 
 
 class EntangledBosonicQudit:
-    def __init__(self, d1, d2):
+    def __init__(self, N, d1, res=1000, d2=None, base_state_list=None):
+        """
+        there isn't really support for d1 \neq d2.
+        """
+        self.N = N
         self.d1 = d1
-        self.d2 = d2
+        self.d2 = d1 if d2 is None else d2
+        self.res = res
+        BQ = BosonicQudit(N,d1,res=res)
+        self.basis_dict, self.phi_list = BQ.create_basis_dictionary(self.res, base_state_list)
 
     def cavity_to_entangled_qudits(self, rho):
         """
@@ -84,9 +94,18 @@ class EntangledBosonicQudit:
         :param rho:
         :return:
         """
-        d1 = self.d1
-        d2 = self.d2
-        sigma = tensor(qeye(d1), qeye(d2))
+        d = self.d1
+        # sigma = tensor(qeye(d), qeye(d))
+        sigma = np.zeros([d*d, d*d])
+
+        dphi = 2 * np.pi / d / self.res
+        for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
+            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * sum([tensor(self.basis_dict[(i_A, phi_A)],
+                                                                     self.basis_dict[(i_B, phi_B)]).dag()
+                                      * rho *
+                                      tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
+                                      for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])[0][0][0]
+        return Qobj(sigma).unit()
 
 
         return sigma
@@ -281,6 +300,11 @@ class EntangledQudit:
                   for s_A, s_B in s_A_B_list
                   for l_A, l_B in l_A_B_list]
         return sum(p_list)
+
+    def probability_list(self, gamma_loss_A, gamma_dephasing_A):
+        return [self.p(gamma_loss_A, gamma_dephasing_A, s1, s2, l1, l2) for s1, s2, l1, l2 in
+                itertools.product(range(int(self.d_A)), range(int(self.d_B)),
+                                  range(int(self.d_A)), range(int(self.d_B)))]
 
     def fidelity_trivial(self, m_i, s_A, s_B, l_A, l_B):
         """
