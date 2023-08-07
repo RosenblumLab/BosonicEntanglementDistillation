@@ -265,7 +265,7 @@ class EntangledQudit:
         # numerator = sum([])
 
     @lru_cache(maxsize=None)
-    def probability_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A,
+    def probability_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A, m_f=2,
                           gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False):
         """
         Calculates the probability (not normalized) for specific results A_1, A_2, B_1, B_2.
@@ -289,7 +289,7 @@ class EntangledQudit:
         l_A_list = list(range(self.d_A))
         l_B_list = list(range(self.d_B))
         l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
-                      if ((l_A+l_B) % int(m_c/2)) == (-(A_2+B_2) % int(m_c/2))]
+                      if ((l_A+l_B) % int(m_c/m_f)) == (-(A_2+B_2) % int(m_c/m_f))]
         if magic_state:
             l_A_list = [m_c/2 - A_2, m_c-A_2]
             l_B_list = [m_c/2 - B_2, m_c-B_2]

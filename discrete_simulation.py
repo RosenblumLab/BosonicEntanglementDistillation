@@ -5,10 +5,11 @@ from qudit import *
 
 
 class DiscreteSimulation:
-    def __init__(self, d, m_i, m_c, magic=False):
+    def __init__(self, d, m_i, m_c, magic=False, m_f=2):
         self.d = d
         self.m_i = m_i
         self.m_c = m_c
+        self.m_f = m_f
         self.magic = magic
         self.enQudit = EntangledQudit(d, d)
 
@@ -21,11 +22,12 @@ class DiscreteSimulation:
                                                     range(int(self.m_c / 2)),
                                                     range(int(self.m_c / 2))):  # , total = int(d/2*d/2)):
             fid = self.enQudit.fidelity_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing, A_1=A_1,
-                                                 B_1=B_1, A_2=A_2,
-                                                 B_2=B_2, m_i=self.m_i, m_c=self.m_c, magic_state=self.magic, **kwargs)
+                                                 B_1=B_1, A_2=A_2, B_2=B_2,
+                                                 m_i=self.m_i, m_c=self.m_c, m_f=self.m_f,
+                                                 magic_state=self.magic, **kwargs)
             prob = self.enQudit.probability_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing,
                                                      A_1=A_1, B_1=B_1,
-                                                     A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c,
+                                                     A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c, m_f=self.m_f,
                                                      magic_state=self.magic)
             if prob != 0:
                 if fid >= fidelity_cut:
