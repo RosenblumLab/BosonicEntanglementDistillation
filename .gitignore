@@ -10,3 +10,6 @@
 .ipynb_checkpoints/entanglement_distillation_playground_1-checkpoint.ipynb
 *.pyc
 .ipynb_checkpoints/entanglement_distillation_playground_1-checkpoint.ipynb
+__pycache__/qudit.cpython-39.pyc
+.idea/bosonicDistillation.iml
+__pycache__/qudit.cpython-39.pyc
