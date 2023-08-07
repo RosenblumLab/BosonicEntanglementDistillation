@@ -29,6 +29,7 @@ class DiscreteSimulation:
                                                      A_1=A_1, B_1=B_1,
                                                      A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c, m_f=self.m_f,
                                                      magic_state=self.magic)
+            # print(A_1,B_1,A_2,B_2)
             if prob != 0:
                 if fid >= fidelity_cut:
                     fidelity_sum += prob * fid
