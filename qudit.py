@@ -163,7 +163,7 @@ class EntangledQudit:
                 self.quditA.p_loss(gamma_loss_A, l_A) * self.quditB.p_loss(gamma_loss_B, l_B))
 
     @lru_cache(maxsize=None)
-    def fidelity_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A,
+    def fidelity_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A, m_f=2,
                           gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False, no_com=False):
         """
         Calculates the fidelity for specific results A_1, A_2, B_1, B_2.
@@ -221,23 +221,23 @@ class EntangledQudit:
         l_B_list = list(range(self.d_B))
 
         l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
-                      if ((l_A+l_B) % int(m_c/2)) == (-(A_2+B_2) % int(m_c/2))]
+                      if ((l_A+l_B) % int(m_c/m_f)) == (-(A_2+B_2) % int(m_c/m_f))]
         if not no_com:
             loss_prob_tuple_list = [(v,
                                      sum([self.quditA.p_loss(gamma_loss_A, m_c/2 - A_2 + t)
                                           * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c / 2 - B_2 - t + j * m_c)
-                                          for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),
+                                          for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),  # should I change this?
                                                                         range(-int(Delta_c), int(Delta_c)))])
-                                     ) for v in range(2)]
+                                     ) for v in range(m_f)]
             v_B = max(loss_prob_tuple_list, key=lambda x: x[1])[0]
         else:
             y_A = A_2
             y_B = B_2
-            v_B = (y_A-y_B) / (m_c/2)
+            v_B = (y_A-y_B) / (m_c/2)  # guess I should change here
         # good_l_A_B_list = [(l_A, l_B) for l_A, l_B in l_A_B_list
         #                    if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
         good_l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
-                           if (l_A + l_B) % m_c == (- A_2 - B_2 + v_B * m_c / 2) % m_c]
+                           if (l_A + l_B) % m_c == (- A_2 - B_2 + v_B * m_c / m_f) % m_c]
 
         if magic_state:
             l_A_list = [m_c/2 - A_2, m_c-A_2]
