@@ -19,8 +19,8 @@ class DiscreteSimulation:
         good_prob = 0
         # going on all possible combination and counting them
         for A_1, B_1, A_2, B_2 in itertools.product(range(int(self.d / self.m_c)), range(int(self.d / self.m_c)),
-                                                    range(int(self.m_c / 2)),
-                                                    range(int(self.m_c / 2))):  # , total = int(d/2*d/2)):
+                                                    range(int(self.m_c / self.m_f)),
+                                                    range(int(self.m_c / self.m_f))):  # , total = int(d/2*d/2)):
             fid = self.enQudit.fidelity_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing, A_1=A_1,
                                                  B_1=B_1, A_2=A_2, B_2=B_2,
                                                  m_i=self.m_i, m_c=self.m_c, m_f=self.m_f,

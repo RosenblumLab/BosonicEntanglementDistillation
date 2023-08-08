@@ -186,8 +186,8 @@ class EntangledQudit:
         Delta_c = self.d_A / m_c
         assert(0 <= A_1 < Delta_c)
         assert(0 <= B_1 < Delta_c)
-        assert(0 <= A_2 < m_c/2)
-        assert(0 <= B_2 < m_c/2)
+        assert(0 <= A_2 < m_c/m_f)
+        assert(0 <= B_2 < m_c/m_f)
         # all possible dephasing errors
         s_A_list = [A_1 + i * Delta_i for i in range(int(-m_i/2), int(m_i/2))]
         s_B_list = [B_1 + i * Delta_i for i in range(int(-m_i/2), int(m_i/2))]
