@@ -2,17 +2,22 @@ import itertools
 from qutip import *
 import numpy as np
 from scipy.special import erf
+from functools import lru_cache
+# from memory_profiler import profile
+
 from scipy import stats
 
-
-
 class BosonicQudit:
-    def __init__(self, N, d, res=1000):
+    def __init__(self, N, d, res=1000, base_state_list=None):
         self.N = N
         self.d = d
         self.res = res
         self.proj_op_list = self.create_proj_list()
-        self.basis_dict, self.phi_list = self.create_basis_dictionary(self.res)
+        if base_state_list is None:
+            pegg_bernet_0 = 1 / np.sqrt(N) * sum([basis(N, i) for i in range(N)])
+            rotation = lambda x: (x * 1.0j * num(N)).expm()
+            base_state_list = [rotation(2 * i * np.pi / d) * pegg_bernet_0 for i in range(d)]
+        self.basis_dict, self.phi_list = self.create_basis_dictionary(self.res, base_state_list)
 
     def cavity_to_qudit(self, rho):
         """
@@ -40,7 +45,7 @@ class BosonicQudit:
             op_list.append(proj)
         return op_list
 
-    def create_basis_dictionary(self, res):
+    def create_basis_dictionary(self, res, base_state_list):
         """
         creates a dictionary that gets a tuple (i,phi) and returns the relevant vector
         :res: the resolution in which we work at
@@ -48,22 +53,41 @@ class BosonicQudit:
         """
         N = self.N
         d = self.d
-        pegg_bernet_0 = 1 / np.sqrt(N) * sum([basis(N, i) for i in range(N)])
+        assert(len(base_state_list) == d)
+
         rotation = lambda x: (x * 1.0j * num(N)).expm()
         phi_minus = -np.pi/d
         phi_plus = np.pi/d
         phi_list = np.linspace(phi_minus, phi_plus, res)
         basis_dict = {}
-        for i in range(d):
+        for i, base_state in enumerate(base_state_list):
             for phi in phi_list:
-                basis_dict[(i, phi)] = (rotation(2 * i * np.pi / d) * rotation(phi) * pegg_bernet_0).unit()
+                basis_dict[(i, phi)] = (rotation(phi) * base_state).unit()
         return basis_dict, phi_list
+
+    def qudit_to_qubit(self, sigma_dit):
+        d = self.d
+        # this is the right way to do it
+        sigma_dit.dims = [[2, d / 2], [2, d / 2]]
+        return sigma_dit.ptrace(0)
+        #
+        # sigma_bit = np.zeros([2, 2])
+        # for i, j in itertools.product(range(2), range(2)):
+        #     sigma_bit[i, j] = sum([basis(d, int(i*d/2 + t)).dag() * sigma_dit * basis(d, int(j*d/2 + t)) for t in range(int(d/2))])[0][0][0]
+        # return Qobj(sigma_bit).unit()
 
 
 class EntangledBosonicQudit:
-    def __init__(self, d1, d2):
+    def __init__(self, N, d1, res=1000, d2=None, base_state_list=None):
+        """
+        there isn't really support for d1 \neq d2.
+        """
+        self.N = N
         self.d1 = d1
-        self.d2 = d2
+        self.d2 = d1 if d2 is None else d2
+        self.res = res
+        BQ = BosonicQudit(N,d1,res=res)
+        self.basis_dict, self.phi_list = BQ.create_basis_dictionary(self.res, base_state_list)
 
     def cavity_to_entangled_qudits(self, rho):
         """
@@ -71,9 +95,18 @@ class EntangledBosonicQudit:
         :param rho:
         :return:
         """
-        d1 = self.d1
-        d2 = self.d2
-        sigma = tensor(qeye(d1), qeye(d2))
+        d = self.d1
+        # sigma = tensor(qeye(d), qeye(d))
+        sigma = np.zeros([d*d, d*d])
+
+        dphi = 2 * np.pi / d / self.res
+        for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
+            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * sum([tensor(self.basis_dict[(i_A, phi_A)],
+                                                                     self.basis_dict[(i_B, phi_B)]).dag()
+                                      * rho *
+                                      tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
+                                      for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])[0][0][0]
+        return Qobj(sigma).unit()
 
 
         return sigma
@@ -82,7 +115,8 @@ class Qudit:
     def __init__(self,d):
         self.d = d
 
-    def p_loss(self, gamma_loss, loss_times, alpha=0):
+    @lru_cache(maxsize=10000000)
+    def p_loss(self, gamma_loss: float, loss_times: int, alpha=0):
         """
         compute probability for loss.
         :param alpha:
@@ -95,6 +129,7 @@ class Qudit:
         return gamma_loss**loss_times/np.math.factorial(loss_times) * (1-gamma_loss)**(alpha**2)
         # return stats.binom.pmf(l, self.d, gamma_loss)
 
+    @lru_cache(maxsize=10000000)
     def p_dephasing(self, gamma_dephasing, s):
         if s > (self.d / 2):
             s = s - self.d
@@ -119,6 +154,7 @@ class EntangledQudit:
         '''
         return sum([tup[0]*self.dit(tup[1], tup[2]) for tup in digitList]).unit()
 
+    @lru_cache(maxsize=10000000)
     def p(self, gamma_loss_A, gamma_dephasing_A, s_A,s_B,l_A,l_B, gamma_loss_B=None, gamma_dephasing_B=None):
         if gamma_loss_B is None:
             gamma_loss_B = gamma_loss_A
@@ -127,7 +163,9 @@ class EntangledQudit:
         return (self.quditA.p_dephasing(gamma_dephasing_A, s_A) * self.quditB.p_dephasing(gamma_dephasing_B, s_B) *
                 self.quditA.p_loss(gamma_loss_A, l_A) * self.quditB.p_loss(gamma_loss_B, l_B))
 
-    def fidelity_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A,
+    # @lru_cache(maxsize=None)
+    # @profile
+    def fidelity_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A, m_f=2,
                           gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False, no_com=False):
         """
         Calculates the fidelity for specific results A_1, A_2, B_1, B_2.
@@ -150,8 +188,8 @@ class EntangledQudit:
         Delta_c = self.d_A / m_c
         assert(0 <= A_1 < Delta_c)
         assert(0 <= B_1 < Delta_c)
-        assert(0 <= A_2 < m_c/2)
-        assert(0 <= B_2 < m_c/2)
+        assert(0 <= A_2 < m_c/m_f)
+        assert(0 <= B_2 < m_c/m_f)
         # all possible dephasing errors
         s_A_list = [A_1 + i * Delta_i for i in range(int(-m_i/2), int(m_i/2))]
         s_B_list = [B_1 + i * Delta_i for i in range(int(-m_i/2), int(m_i/2))]
@@ -185,23 +223,23 @@ class EntangledQudit:
         l_B_list = list(range(self.d_B))
 
         l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
-                      if ((l_A+l_B) % int(m_c/2)) == (-(A_2+B_2) % int(m_c/2))]
+                      if ((l_A+l_B) % int(m_c/m_f)) == (-(A_2+B_2) % int(m_c/m_f))]
         if not no_com:
             loss_prob_tuple_list = [(v,
                                      sum([self.quditA.p_loss(gamma_loss_A, m_c/2 - A_2 + t)
                                           * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c / 2 - B_2 - t + j * m_c)
-                                          for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),
-                                                                        range(-int(Delta_c/2), int(Delta_c/2)))])
-                                     ) for v in range(2)]
+                                          for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),  # should I change this?
+                                                                        range(-int(Delta_c), int(Delta_c)))])
+                                     ) for v in range(m_f)]
             v_B = max(loss_prob_tuple_list, key=lambda x: x[1])[0]
         else:
             y_A = A_2
             y_B = B_2
-            v_B = (y_A-y_B) / (m_c/2)
+            v_B = (y_A-y_B) / (m_c/2)  # guess I should change here
         # good_l_A_B_list = [(l_A, l_B) for l_A, l_B in l_A_B_list
         #                    if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
         good_l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
-                           if (l_A + l_B) % m_c == (- A_2 - B_2 + v_B * m_c / 2) % m_c]
+                           if (l_A + l_B) % m_c == (- A_2 - B_2 + v_B * m_c / m_f) % m_c]
 
         if magic_state:
             l_A_list = [m_c/2 - A_2, m_c-A_2]
@@ -218,17 +256,19 @@ class EntangledQudit:
                               s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
                        for s_A, s_B in good_s_A_B_list
                        for l_A, l_B in good_l_A_B_list]
-        p_dict = {f"{s_A}, {s_B}, {l_A}, {l_B}":
-                      self.p(gamma_loss_A=gamma_loss_A, gamma_dephasing_A = gamma_dephasing_A,
-                             s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
-                  for s_A, s_B in s_A_B_list
-                  for l_A, l_B in l_A_B_list}
+        # p_dict = {f"{s_A}, {s_B}, {l_A}, {l_B}":
+        #               self.p(gamma_loss_A=gamma_loss_A, gamma_dephasing_A = gamma_dephasing_A,
+        #                      s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
+        #           for s_A, s_B in s_A_B_list
+        #           for l_A, l_B in l_A_B_list}
         # if not set(good_l_A_B_list).issubset(set(good_l_A_B_list2)):
         #     print("ahhhhaaa")
         return sum(good_p_list)/sum(p_list)
         # numerator = sum([])
 
-    def probability_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A,
+    # @profile
+    # @lru_cache(maxsize=None)
+    def probability_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A, m_f=2,
                           gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False):
         """
         Calculates the probability (not normalized) for specific results A_1, A_2, B_1, B_2.
@@ -252,7 +292,7 @@ class EntangledQudit:
         l_A_list = list(range(self.d_A))
         l_B_list = list(range(self.d_B))
         l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
-                      if ((l_A+l_B) % int(m_c/2)) == (-(A_2+B_2) % int(m_c/2))]
+                      if ((l_A+l_B) % int(m_c/m_f)) == (-(A_2+B_2) % int(m_c/m_f))]
         if magic_state:
             l_A_list = [m_c/2 - A_2, m_c-A_2]
             l_B_list = [m_c/2 - B_2, m_c-B_2]
@@ -263,6 +303,11 @@ class EntangledQudit:
                   for s_A, s_B in s_A_B_list
                   for l_A, l_B in l_A_B_list]
         return sum(p_list)
+
+    def probability_list(self, gamma_loss_A, gamma_dephasing_A):
+        return [self.p(gamma_loss_A, gamma_dephasing_A, s1, s2, l1, l2) for s1, s2, l1, l2 in
+                itertools.product(range(int(self.d_A)), range(int(self.d_B)),
+                                  range(int(self.d_A)), range(int(self.d_B)))]
 
     def fidelity_trivial(self, m_i, s_A, s_B, l_A, l_B):
         """
@@ -287,7 +332,7 @@ class EntangledQudit:
         # print(traced_state)
         # compare to a bell state
         bell_state = (tensor(basis(2, 0), basis(2, 0)) + tensor(basis(2, 1), basis(2, 1))).unit()
-        return fidelity(traced_state, ket2dm(bell_state).unit())
+        return (fidelity(traced_state, ket2dm(bell_state).unit()))**2
 
     def transform_to_fourier_basis(self, qudit: Qobj, reverse=False):
         plus_basis_list1 = []
