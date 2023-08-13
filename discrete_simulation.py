@@ -1,7 +1,8 @@
 import itertools
 from qutip import *
-import numpy as np
+# import numpy as np
 from qudit import *
+from memory_profiler import profile
 
 
 class DiscreteSimulation:
@@ -13,7 +14,14 @@ class DiscreteSimulation:
         self.magic = magic
         self.enQudit = EntangledQudit(d, d)
 
+    # @profile
     def average_fidelity(self, gamma_loss, gamma_dephasing, fidelity_cut=0, **kwargs):
+        print(f"calculating for {gamma_loss=}, {gamma_dephasing=}")
+        print("p cache: ", self.enQudit.p.cache_info())
+        print("Ap_dephasing cache: ", self.enQudit.quditA.p_dephasing.cache_info())
+        print("Ap_loss cache: ", self.enQudit.quditA.p_loss.cache_info())
+        print("Bp_dephasing cache: ", self.enQudit.quditB.p_dephasing.cache_info())
+        print("Bp_loss cache: ", self.enQudit.quditB.p_loss.cache_info())
         fidelity_sum = 0
         prob_sum = 0
         good_prob = 0
@@ -29,6 +37,8 @@ class DiscreteSimulation:
                                                      A_1=A_1, B_1=B_1,
                                                      A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c, m_f=self.m_f,
                                                      magic_state=self.magic)
+
+            
             # print(A_1,B_1,A_2,B_2)
             if prob != 0:
                 if fid >= fidelity_cut:
@@ -62,6 +72,13 @@ class DiscreteSimulation:
                                                      magic_state=self.magic)
             prob_sum += prob
         return prob_sum / (self.m_i/2)
+    
+    def clear_cache(self):
+            self.enQudit.p.cache_clear()
+            self.enQudit.quditA.p_dephasing.cache_clear()
+            self.enQudit.quditA.p_loss.cache_clear()
+            self.enQudit.quditB.p_dephasing.cache_clear()
+            self.enQudit.quditB.p_loss.cache_clear()
 
 
     # def average_fidelity_local_filter(self, gamma_loss, gamma_dephasing, fidelity_cut=0, prob_cut=0):
