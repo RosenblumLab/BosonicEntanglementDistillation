@@ -4,7 +4,7 @@ import qutip as qt
 import numpy as np
 from scipy.special import gammaln, factorial, erf, erfc
 
-from rotation_code_utils import factorial_stirling_root as fs
+# from rotation_code_utils import factorial_stirling_root as fs
 
 """
 This file was created by Peter Leviant as part of arXiv:2205.00341v4 

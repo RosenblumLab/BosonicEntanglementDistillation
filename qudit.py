@@ -81,6 +81,7 @@ class EntangledBosonicQudit:
     def __init__(self, N, d1, res=1000, d2=None, base_state_list=None):
         """
         there isn't really support for d1 \neq d2.
+        :param base_state_list: a list of the base states. as kets.
         """
         self.N = N
         self.d1 = d1
