@@ -81,6 +81,7 @@ class EntangledBosonicQudit:
     def __init__(self, N, d1, res=1000, d2=None, base_state_list=None):
         """
         there isn't really support for d1 \neq d2.
+        :param base_state_list: a list of the base states. as kets.
         """
         self.N = N
         self.d1 = d1
@@ -95,6 +96,8 @@ class EntangledBosonicQudit:
         :param rho:
         :return:
         """
+        if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
+            print("warning: wrong dimension of density matrix")
         d = self.d1
         # sigma = tensor(qeye(d), qeye(d))
         sigma = np.zeros([d*d, d*d])
@@ -332,6 +335,7 @@ class EntangledQudit:
         # print(traced_state)
         # compare to a bell state
         bell_state = (tensor(basis(2, 0), basis(2, 0)) + tensor(basis(2, 1), basis(2, 1))).unit()
+        # fidelity should be squared!
         return (fidelity(traced_state, ket2dm(bell_state).unit()))**2
 
     def transform_to_fourier_basis(self, qudit: Qobj, reverse=False):

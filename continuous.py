@@ -16,27 +16,27 @@ class ContinuousProtocol:
         self.m_c = m_c
         self.decode_base_list = self._create_base_list()
 
-    def simulate_fidelity_specific(self, A1, B1, A2, B2, gamma_loss, gamma_dephasing):
+    def simulate_fidelity_specific(self, A1, B1, A2, B2, gamma_loss, gamma_dephasing, decode_res=10):
         initial_state = self._create_initial_state()
         noisy_state = self._add_noise(initial_state, gamma_loss, gamma_dephasing)
         M1 = tensor(self._create_phase_parity_measurement(A1), self._create_phase_parity_measurement(B1))
         M2 = tensor(self._create_photon_parity_measurement(A2), self._create_photon_parity_measurement(B2))
         U1 = self._create_phase_rotation(A1, B1)
-        plot_wigner((M1 * noisy_state * M1.dag()).ptrace(0))
+        # plot_wigner((M1 * noisy_state * M1.dag()).ptrace(0))
         state1 = M2 * M1 * noisy_state * M1.dag() * M2.dag()
         print("before rotation")
-        plot_wigner(state1.ptrace(0))
+        # plot_wigner(state1.ptrace(0))
         # plot_wigner(state1.ptrace(1))
-        state2 = U1 * state1 * U1.dag()
+        self.final = state2 = U1 * state1 * U1.dag()
         # print("after rotation")
         # plot_wigner(state2.ptrace(0))
         # plot_wigner(state2.ptrace(1))
 
 
-        # this is not the same resolution as the self.res!!!!
-        self.BosonicObject = EntangledBosonicQudit(self.N, self.m_c, res=10, d2=None,
+        # this is the decoding process. not the same resolution as the self.res!
+        self.BosonicObject = EntangledBosonicQudit(self.N, self.m_c, res=decode_res, d2=None,
                                                    base_state_list=self.decode_base_list)
-        self.test = self.BosonicObject.cavity_to_entangled_qudits(state2)
+        # self.test = self.BosonicObject.cavity_to_entangled_qudits(state2)
         # U2 = self._create_photon_rotation(A2, B2)
         ## now should do rotation and fidelity measurement
 
