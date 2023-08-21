@@ -2,17 +2,17 @@ import itertools
 from qutip import *
 # import numpy as np
 from qudit import *
-from memory_profiler import profile
+# from memory_profiler import profile
 
 
 class DiscreteSimulation:
-    def __init__(self, d, m_i, m_c, magic=False, m_f=2):
+    def __init__(self, d, m_i, m_c, m_f=2, alpha=1):
         self.d = d
         self.m_i = m_i
         self.m_c = m_c
         self.m_f = m_f
-        self.magic = magic
         self.enQudit = EntangledQudit(d, d)
+        self.alpha = alpha
 
     # @profile
     def average_fidelity(self, gamma_loss, gamma_dephasing, fidelity_cut=0, **kwargs):
@@ -32,11 +32,11 @@ class DiscreteSimulation:
             fid = self.enQudit.fidelity_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing, A_1=A_1,
                                                  B_1=B_1, A_2=A_2, B_2=B_2,
                                                  m_i=self.m_i, m_c=self.m_c, m_f=self.m_f,
-                                                 magic_state=self.magic, **kwargs)
+                                                 alpha=self.alpha, **kwargs)
             prob = self.enQudit.probability_specific(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing,
                                                      A_1=A_1, B_1=B_1,
                                                      A_2=A_2, B_2=B_2, m_i=self.m_i, m_c=self.m_c, m_f=self.m_f,
-                                                     magic_state=self.magic)
+                                                     alpha=self.alpha)
 
             
             # print(A_1,B_1,A_2,B_2)

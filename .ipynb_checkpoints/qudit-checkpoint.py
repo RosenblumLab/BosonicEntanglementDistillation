@@ -119,7 +119,7 @@ class Qudit:
         self.d = d
 
     @lru_cache(maxsize=10000000)
-    def p_loss(self, gamma_loss: float, loss_times: int, alpha=0):
+    def p_loss(self, gamma_loss: float, loss_times: int, alpha=1):
         """
         compute probability for loss.
         :param alpha:
@@ -129,7 +129,8 @@ class Qudit:
         """
         if loss_times < 0 or loss_times >= self.d:
             return 0
-        return gamma_loss**loss_times/np.math.factorial(loss_times) * (1-gamma_loss)**(alpha**2)
+        # print(alpha)
+        return gamma_loss**loss_times/np.math.factorial(loss_times) * (1-gamma_loss)**(alpha**2/2) * (alpha**2)**loss_times
         # return stats.binom.pmf(l, self.d, gamma_loss)
 
     @lru_cache(maxsize=10000000)
@@ -158,18 +159,18 @@ class EntangledQudit:
         return sum([tup[0]*self.dit(tup[1], tup[2]) for tup in digitList]).unit()
 
     @lru_cache(maxsize=10000000)
-    def p(self, gamma_loss_A, gamma_dephasing_A, s_A,s_B,l_A,l_B, gamma_loss_B=None, gamma_dephasing_B=None):
+    def p(self, gamma_loss_A, gamma_dephasing_A, s_A,s_B,l_A,l_B, gamma_loss_B=None, gamma_dephasing_B=None, alpha=1):
         if gamma_loss_B is None:
             gamma_loss_B = gamma_loss_A
         if gamma_dephasing_B is None:
             gamma_dephasing_B = gamma_dephasing_A
         return (self.quditA.p_dephasing(gamma_dephasing_A, s_A) * self.quditB.p_dephasing(gamma_dephasing_B, s_B) *
-                self.quditA.p_loss(gamma_loss_A, l_A) * self.quditB.p_loss(gamma_loss_B, l_B))
+                self.quditA.p_loss(gamma_loss_A, l_A, alpha=alpha) * self.quditB.p_loss(gamma_loss_B, l_B, alpha=alpha))
 
     # @lru_cache(maxsize=None)
     # @profile
     def fidelity_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A, m_f=2,
-                          gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False, no_com=False):
+                          gamma_loss_B=None, gamma_dephasing_B=None, no_com=False, alpha=1):
         """
         Calculates the fidelity for specific results A_1, A_2, B_1, B_2.
         We need to write all the possible dephasing errors and loss errors, and calculate the possible probabilities.
@@ -229,8 +230,8 @@ class EntangledQudit:
                       if ((l_A+l_B) % int(m_c/m_f)) == (-(A_2+B_2) % int(m_c/m_f))]
         if not no_com:
             loss_prob_tuple_list = [(v,
-                                     sum([self.quditA.p_loss(gamma_loss_A, m_c/2 - A_2 + t)
-                                          * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c / 2 - B_2 - t + j * m_c)
+                                     sum([self.quditA.p_loss(gamma_loss_A, m_c//2 - A_2 + t, alpha=alpha)
+                                          * self.quditB.p_loss(gamma_loss_B, (1-v) * m_c // 2 - B_2 - t + j * m_c, alpha=alpha)
                                           for t, j in itertools.product(range(-int(m_c/2), int(m_c/2)),  # should I change this?
                                                                         range(-int(Delta_c), int(Delta_c)))])
                                      ) for v in range(m_f)]
@@ -243,20 +244,14 @@ class EntangledQudit:
         #                    if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
         good_l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
                            if (l_A + l_B) % m_c == (- A_2 - B_2 + v_B * m_c / m_f) % m_c]
-
-        if magic_state:
-            l_A_list = [m_c/2 - A_2, m_c-A_2]
-            l_B_list = [m_c/2 - B_2, m_c-B_2]
-            l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)]
-            good_l_A_B_list = [(m_c/2 - A_2, m_c/2 - B_2)]
         # print(f"{l_A_B_list=}")
         # print(f"{good_l_A_B_list=}")
         p_list = [self.p(gamma_loss_A=gamma_loss_A, gamma_dephasing_A=gamma_dephasing_A,
-                         s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
+                         s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B, alpha=alpha)
                   for s_A, s_B in s_A_B_list
                   for l_A, l_B in l_A_B_list]
         good_p_list = [self.p(gamma_loss_A=gamma_loss_A, gamma_dephasing_A=gamma_dephasing_A,
-                              s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
+                              s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B, alpha=alpha)
                        for s_A, s_B in good_s_A_B_list
                        for l_A, l_B in good_l_A_B_list]
         # p_dict = {f"{s_A}, {s_B}, {l_A}, {l_B}":
@@ -272,7 +267,7 @@ class EntangledQudit:
     # @profile
     # @lru_cache(maxsize=None)
     def probability_specific(self, A_1, A_2, B_1, B_2, m_i, m_c, gamma_loss_A, gamma_dephasing_A, m_f=2,
-                          gamma_loss_B=None, gamma_dephasing_B=None, magic_state=False):
+                          gamma_loss_B=None, gamma_dephasing_B=None, alpha=1):
         """
         Calculates the probability (not normalized) for specific results A_1, A_2, B_1, B_2.
         We need to write all the possible dephasing errors and loss errors, and calculate the possible probabilities.
@@ -296,19 +291,14 @@ class EntangledQudit:
         l_B_list = list(range(self.d_B))
         l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
                       if ((l_A+l_B) % int(m_c/m_f)) == (-(A_2+B_2) % int(m_c/m_f))]
-        if magic_state:
-            l_A_list = [m_c/2 - A_2, m_c-A_2]
-            l_B_list = [m_c/2 - B_2, m_c-B_2]
-            l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)]
-            good_l_A_B_list = [(m_c/2 - A_2, m_c/2 - B_2)]
         p_list = [self.p(gamma_loss_A=gamma_loss_A, gamma_dephasing_A=gamma_dephasing_A,
-                         s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B)
+                         s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B, alpha=alpha)
                   for s_A, s_B in s_A_B_list
                   for l_A, l_B in l_A_B_list]
         return sum(p_list)
 
-    def probability_list(self, gamma_loss_A, gamma_dephasing_A):
-        return [self.p(gamma_loss_A, gamma_dephasing_A, s1, s2, l1, l2) for s1, s2, l1, l2 in
+    def probability_list(self, gamma_loss_A, gamma_dephasing_A, alpha=1):
+        return [self.p(gamma_loss_A, gamma_dephasing_A, s1, s2, l1, l2, alpha=alpha) for s1, s2, l1, l2 in
                 itertools.product(range(int(self.d_A)), range(int(self.d_B)),
                                   range(int(self.d_A)), range(int(self.d_B)))]
 
