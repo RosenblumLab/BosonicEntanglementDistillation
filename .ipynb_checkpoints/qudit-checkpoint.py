@@ -3,7 +3,11 @@ from qutip import *
 import numpy as np
 from scipy.special import erf
 from functools import lru_cache
+import time
+# import qutip_cupy
 # from memory_profiler import profile
+from numba import njit
+
 
 from scipy import stats
 
@@ -90,6 +94,7 @@ class EntangledBosonicQudit:
         BQ = BosonicQudit(N,d1,res=res)
         self.basis_dict, self.phi_list = BQ.create_basis_dictionary(self.res, base_state_list)
 
+    # @jit
     def cavity_to_entangled_qudits(self, rho):
         """
 
@@ -100,17 +105,54 @@ class EntangledBosonicQudit:
             print("warning: wrong dimension of density matrix")
         d = self.d1
         # sigma = tensor(qeye(d), qeye(d))
-        sigma = np.zeros([d*d, d*d])
-
+        sigma = np.zeros([d*d, d*d], dtype=np.complex128)
         dphi = 2 * np.pi / d / self.res
+        
+        basis_dict_np = {key: np.array(value.full()) for key, value in self.basis_dict.items()}
+        rho_np = np.array(rho.full()) if isinstance(rho, qutip.Qobj) else rho
+
         for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
-            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * sum([tensor(self.basis_dict[(i_A, phi_A)],
-                                                                     self.basis_dict[(i_B, phi_B)]).dag()
-                                      * rho *
-                                      tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
-                                      for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])[0][0][0]
+            time0 = time.time()
+
+            i_A_vector_list = [ basis_dict_np[(i_A, phi)] for phi in self.phi_list ]
+            i_B_vector_list = [ basis_dict_np[(i_B, phi)] for phi in self.phi_list ]
+            j_A_vector_list = [ basis_dict_np[(j_A, phi)] for phi in self.phi_list ]
+            j_B_vector_list = [ basis_dict_np[(j_B, phi)] for phi in self.phi_list ]
+            
+            total_sum = EntangledBosonicQudit._jit_summing_for_(rho_np, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list)
+            # total_sum = 0
+            # for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list):
+            #     # ang = tensor(self.basis_dict[(i_A, phi_A)], self.basis_dict[(i_B, phi_B)]).to('cupyd')
+            #     # print(ang.data)
+            #     # print(ang.dag() * rho * ang)
+            #     total_sum += ang.dag() * rho * ang
+            duration = time.time() - time0
+            print("list", duration)
+            time0 = time.time()
+            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * total_sum
+            duration = time.time() - time0
+            print("sum", duration)
         return Qobj(sigma).unit()
 
+    @staticmethod
+    # @njit
+    def _jit_summing_for_(rho_np, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list):
+        i_list = []
+        total_sum = 0
+        for i_A_phi, i_B_phi in zip(i_A_vector_list,j_A_vector_list):
+            for j_A_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
+                ang = np.kron(i_A_phi, i_B_phi)
+                ang2 = np.kron(j_A_phi, j_B_phi)
+                # print(ang.data)
+                # print(ang.dag() * rho * ang)
+                # print(ang2.shape)
+                # print(rho_np.shape)
+                total_sum += (ang.conj().T @ rho_np @ ang2)[0,0]
+        return total_sum
+
+        # tensor(self.basis_dict[(i_A, phi_A)], self.basis_dict[(i_B, phi_B)]).dag()
+        #                               * rho *
+        #                               tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
 
         return sigma
 
