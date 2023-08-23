@@ -37,7 +37,7 @@ class ContinuousProtocol:
         print("operator creation time:", duration)
         # plot_wigner((M1 * noisy_state * M1.dag()).ptrace(0))
         time0 = time.time()
-        state1 = M2 * M1 * noisy_state * M1.dag() * M2.dag()
+        state1 = M1 * noisy_state * M1.dag() #* M2.dag()
         self.state_after_meas = state1
         
         print("before rotation")
