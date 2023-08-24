@@ -97,17 +97,45 @@ class EntangledBosonicQudit:
         BQ = BosonicQudit(N,d1,res=res)
         self.basis_dict, self.phi_list = BQ.create_basis_dictionary(self.res, base_state_list)
 
-    # @jit
-    def cavity_to_entangled_qudits(self, rho):
-        """
-
-        :param rho:
-        :return:
-        """
+    def cavity_to_entangled_qudits_dense_gpu(self, rho):
         if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
             print("warning: wrong dimension of density matrix")
         d = self.d1
         # sigma = tensor(qeye(d), qeye(d))
+        sigma = np.zeros([d*d, d*d], dtype=np.complex128)
+        dphi = 2 * np.pi / d / self.res
+        
+        basis_dict_np = {key: np.array(value.full()) for key, value in self.basis_dict.items()}
+        rho_np = np.array(rho.full()) if isinstance(rho, qutip.Qobj) else rho
+
+        for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
+            time0 = time.time()
+
+            i_A_vector_list = [ basis_dict_np[(i_A, phi)] for phi in self.phi_list ]
+            i_B_vector_list = [ basis_dict_np[(i_B, phi)] for phi in self.phi_list ]
+            j_A_vector_list = [ basis_dict_np[(j_A, phi)] for phi in self.phi_list ]
+            j_B_vector_list = [ basis_dict_np[(j_B, phi)] for phi in self.phi_list ]
+            
+            total_sum = 0
+            for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
+                for i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
+                    ang = np.kron(i_A_phi, i_B_phi)
+                    ang2 = np.kron(j_A_phi, j_B_phi)
+
+                    total_sum += (ang.conj().T @ rho_np @ ang2)[0,0]
+
+            duration = time.time() - time0
+            print("dense gpu:", duration)
+            time0 = time.time()
+            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * total_sum
+
+        return Qobj(sigma).unit()
+    
+    
+    def cavity_to_entangled_qudits_sparse_gpu(self, rho):
+        if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
+            print("warning: wrong dimension of density matrix")
+        d = self.d1
         sigma = np.zeros([d*d, d*d], dtype=np.complex128)
         dphi = 2 * np.pi / d / self.res
         
@@ -121,46 +149,39 @@ class EntangledBosonicQudit:
         for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
             print(i_A, i_B, j_A, j_B)
 
+            time0 = time.time()
+            
             i_A_vector_list = [ cxs.csr_matrix(basis_dict_sp[(i_A, phi)]) for phi in self.phi_list ]
             i_B_vector_list = [ cxs.csr_matrix(basis_dict_sp[(i_B, phi)]) for phi in self.phi_list ]
             j_A_vector_list = [ cxs.csr_matrix(basis_dict_sp[(j_A, phi)]) for phi in self.phi_list ]
             j_B_vector_list = [ cxs.csr_matrix(basis_dict_sp[(j_B, phi)]) for phi in self.phi_list ]
 
-            # i_A_vector_list = cxs.csr_matrix(i_A_vector_list)
-            # i_B_vector_list = cxs.csr_matrix(i_B_vector_list)
-            # j_A_vector_list = cxs.csr_matrix(j_A_vector_list)
-            # j_B_vector_list = cxs.csr_matrix(j_B_vector_list)
-
-            # print(i_A_vector_list[0])
-
-            time0 = time.time()
             
-            # i_A_vector_list = cp.asarray(i_A_vector_list)
-            # j_A_vector_list = cp.asarray(j_A_vector_list)
-            # i_B_vector_list = cp.asarray(i_B_vector_list)
-            # j_B_vector_list = cp.asarray(j_B_vector_list)
-            
-            total_sum = EntangledBosonicQudit._jit_summing_for_(rho_cs, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list)
-            # total_sum2 = total_sum
-            # print(f"{total_sum=}")
-            # total_sum = 0
-            # for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list):
-            #     ang = tensor(self.basis_dict[(i_A, phi_A)], self.basis_dict[(i_B, phi_B)])
-            #     ang2 = tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
-            #     # print(ang.data)
-            #     # print(ang.dag() * rho * ang)
-            #     total_sum += ang.dag() * rho * ang2
+            total_sum = 0
+            for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
+                for i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
+                    time_kron = time.time()
+                    ang = cxs.kron(i_A_phi, i_B_phi)
+                    ang2 = cxs.kron(j_A_phi, j_B_phi)
+                    durationkron = time.time() - time_kron
+                    print("kron time", durationkron)
+                    time2 = time.time()
+                    intermediate_product = rho_cs @ ang2
+                    result = ang.conj().T.dot(intermediate_product)[0,0]
+                            
+                    total_sum += result
+                    
+                    duration1 = time.time() - time2
+                    print("mul time", duration1)
             duration = time.time() - time0
-            print("list", duration)
-            # time0 = time.time()
+            
+            print("sparse gpu", duration)
+
             sigma[i_A * d + i_B, j_A * d + j_B] = dphi * total_sum
-            # duration = time.time() - time0
-            # print("sum", duration)
-            # print(f"{total_sum=}")
+
         return Qobj(sigma).unit()
 
     @staticmethod
-    # @njit
     def _jit_summing_for_(rho_cs, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list):
         # i_list = []
         # j_list = []
@@ -201,11 +222,10 @@ class EntangledBosonicQudit:
 
         return sigma
 
-    def cavity_to_entangled_qudits_cpu(self, rho):
+    def cavity_to_entangled_qudits_qutip(self, rho):
         if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
             print("warning: wrong dimension of density matrix")
         d = self.d1
-        # sigma = tensor(qeye(d), qeye(d))
         sigma = np.zeros([d*d, d*d], dtype=np.complex128)
 
         dphi = 2 * np.pi / d / self.res
@@ -218,7 +238,7 @@ class EntangledBosonicQudit:
                                       tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
                                       for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])[0][0][0]
             duration = time.time() - time0
-            print("list", duration)
+            print("qutip loop", duration)
         return Qobj(sigma).unit()
 
 class Qudit:
