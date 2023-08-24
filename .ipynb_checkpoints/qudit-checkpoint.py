@@ -8,6 +8,8 @@ import time
 # from memory_profiler import profile
 # from numba import njit
 import cupy as cp
+import scipy.sparse as sp
+import cupyx.scipy.sparse as cxs
 
 
 from scipy import stats
@@ -109,32 +111,36 @@ class EntangledBosonicQudit:
         sigma = np.zeros([d*d, d*d], dtype=np.complex128)
         dphi = 2 * np.pi / d / self.res
         
-        basis_dict_np = {key: np.array(value.full()) for key, value in self.basis_dict.items()}
-        rho_np = np.array(rho.full()) if isinstance(rho, qutip.Qobj) else rho
-        rho_np = cp.asarray(rho_np)
+        basis_dict_sp = {key: sp.csr_matrix(value.full()) for key, value in self.basis_dict.items()}
+        # rho_np = np.array(rho.full()) if isinstance(rho, qutip.Qobj) else rho
+        rho_sp = sp.csr_matrix(rho.data)
+        rho_cs = cxs.csr_matrix(rho_sp)
+        # rho_np = cp.asarray(rho_np)
     
         
         for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
-            
+            print(i_A, i_B, j_A, j_B)
 
-            i_A_vector_list = [ basis_dict_np[(i_A, phi)] for phi in self.phi_list ]
-            i_B_vector_list = [ basis_dict_np[(i_B, phi)] for phi in self.phi_list ]
-            j_A_vector_list = [ basis_dict_np[(j_A, phi)] for phi in self.phi_list ]
-            j_B_vector_list = [ basis_dict_np[(j_B, phi)] for phi in self.phi_list ]
+            i_A_vector_list = [ cxs.csr_matrix(basis_dict_sp[(i_A, phi)]) for phi in self.phi_list ]
+            i_B_vector_list = [ cxs.csr_matrix(basis_dict_sp[(i_B, phi)]) for phi in self.phi_list ]
+            j_A_vector_list = [ cxs.csr_matrix(basis_dict_sp[(j_A, phi)]) for phi in self.phi_list ]
+            j_B_vector_list = [ cxs.csr_matrix(basis_dict_sp[(j_B, phi)]) for phi in self.phi_list ]
 
-            i_A_vector_list = np.array(i_A_vector_list)[:,:,0]
-            i_B_vector_list = np.array(i_B_vector_list)[:,:,0]
-            j_A_vector_list = np.array(j_A_vector_list)[:,:,0]
-            j_B_vector_list = np.array(j_B_vector_list)[:,:,0]
+            # i_A_vector_list = cxs.csr_matrix(i_A_vector_list)
+            # i_B_vector_list = cxs.csr_matrix(i_B_vector_list)
+            # j_A_vector_list = cxs.csr_matrix(j_A_vector_list)
+            # j_B_vector_list = cxs.csr_matrix(j_B_vector_list)
 
-            # time0 = time.time()
+            # print(i_A_vector_list[0])
+
+            time0 = time.time()
             
-            i_A_vector_list = cp.asarray(i_A_vector_list)
-            j_A_vector_list = cp.asarray(j_A_vector_list)
-            i_B_vector_list = cp.asarray(i_B_vector_list)
-            j_B_vector_list = cp.asarray(j_B_vector_list)
+            # i_A_vector_list = cp.asarray(i_A_vector_list)
+            # j_A_vector_list = cp.asarray(j_A_vector_list)
+            # i_B_vector_list = cp.asarray(i_B_vector_list)
+            # j_B_vector_list = cp.asarray(j_B_vector_list)
             
-            total_sum = EntangledBosonicQudit._jit_summing_for_(rho_np, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list)
+            total_sum = EntangledBosonicQudit._jit_summing_for_(rho_cs, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list)
             # total_sum2 = total_sum
             # print(f"{total_sum=}")
             # total_sum = 0
@@ -144,8 +150,8 @@ class EntangledBosonicQudit:
             #     # print(ang.data)
             #     # print(ang.dag() * rho * ang)
             #     total_sum += ang.dag() * rho * ang2
-            # duration = time.time() - time0
-            # print("list", duration)
+            duration = time.time() - time0
+            print("list", duration)
             # time0 = time.time()
             sigma[i_A * d + i_B, j_A * d + j_B] = dphi * total_sum
             # duration = time.time() - time0
@@ -155,31 +161,39 @@ class EntangledBosonicQudit:
 
     @staticmethod
     # @njit
-    def _jit_summing_for_(rho_np, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list):
+    def _jit_summing_for_(rho_cs, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list):
         # i_list = []
         # j_list = []
-        # total_sum = 0
-        # for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
-        #     for i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
-        #         ang = np.kron(i_A_phi, i_B_phi)
-        #         ang2 = np.kron(j_A_phi, j_B_phi)
-        # #         # print(ang.data)
-        # #         # print(ang.dag() * rho * ang)
-        # #         # print(ang2.shape)
-        # #         # print(rho_np.shape)
-        #         total_sum += (ang.conj().T @ rho_np @ ang2)
+        total_sum = 0
+        for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
+            for i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
+                ang = cxs.kron(i_A_phi, i_B_phi).tocsr()
+                ang2 = cxs.kron(j_A_phi, j_B_phi).tocsr()
+
+                # Compute the intermediate product with rho
+                intermediate_product = rho_cs @ ang2
+        
+                # Compute the dot product with ang.conj().T
+                result = ang.conj().T.dot(intermediate_product)[0,0]
+        
+                total_sum += result
+        #         # print(ang.data)
+        #         # print(ang.dag() * rho * ang)
+        #         # print(ang2.shape)
+        #         # print(rho_np.shape)
+                # total_sum += (ang.conj().T @ rho_sp @ ang2)
         # i_list = np.array(i_list)
         # j_list = np.array(j_list)
 
-        i_list = cp.einsum('ik, in -> ikn', i_A_vector_list, i_B_vector_list).reshape(len(i_A_vector_list), -1)
-        j_list = cp.einsum('ik, in -> ikn', j_A_vector_list, j_B_vector_list).reshape(len(i_A_vector_list), -1).conj()
+        # i_list = cp.einsum('ik, in -> ikn', i_A_vector_list, i_B_vector_list).reshape(len(i_A_vector_list), -1)
+        # j_list = cp.einsum('ik, in -> ikn', j_A_vector_list, j_B_vector_list).reshape(len(i_A_vector_list), -1).conj()
         # print(f"{i_list.shape=}")
         # print(i_list[0,:])
         # print(np.kron(i_A_vector_list[0], i_B_vector_list[0]))
         # print(f"{rho_np.shape=}")
         # print(f"{j_list.shape=}")
-        # return total_sum
-        return cp.einsum('ij, jk, ik', i_list,rho_np,j_list)
+        return total_sum
+        # return cp.einsum('ij, jk, ik', i_list,rho_np,j_list)
 
         # tensor(self.basis_dict[(i_A, phi_A)], self.basis_dict[(i_B, phi_B)]).dag()
         #                               * rho *
@@ -196,11 +210,15 @@ class EntangledBosonicQudit:
 
         dphi = 2 * np.pi / d / self.res
         for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
+            print(i_A, i_B, j_A, j_B)
+            time0 = time.time()
             sigma[i_A * d + i_B, j_A * d + j_B] = dphi * sum([tensor(self.basis_dict[(i_A, phi_A)],
                                                                      self.basis_dict[(i_B, phi_B)]).dag()
                                       * rho *
                                       tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
-                                      for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])
+                                      for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])[0][0][0]
+            duration = time.time() - time0
+            print("list", duration)
         return Qobj(sigma).unit()
 
 class Qudit:
