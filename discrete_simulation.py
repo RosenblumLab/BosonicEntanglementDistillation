@@ -111,13 +111,19 @@ class DiscreteSimulation:
     #     return average_fid, fail_probability
 
 class ContinuousSimulation:
-    def __init__(self, N, d, m_i, m_c, m_f=2, alpha=1, decode_res=16):
+    def __init__(self, N, d, m_i, m_c, m_f=2, alpha=1, decode_res=16, squeezed = 0):
+        """
+        :param squeezed: Value for squeezing. Negative value for squeezing along the real axis.
+        """
         self.N = N
         self.d = d
         self.m_i = m_i
         self.m_c = m_c
         self.m_f = m_f  # NOT SUPPORTED other than 2
-        self.proObj = ContinuousProtocol(coherent(N,alpha),res=d,m_i=m_i, m_c=m_c)
+        self.state = coherent(N,alpha)
+        if squeezed !=0:
+            self.state = displace(N,alpha) * squeeze(N, squeezed) * coherent(N,0)
+        self.proObj = ContinuousProtocol(self.state,res=d,m_i=m_i, m_c=m_c)
         self.enQudit = EntangledQudit(d, d)
         self.alpha = alpha
         self.decode_res = decode_res

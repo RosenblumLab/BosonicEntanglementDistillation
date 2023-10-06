@@ -483,6 +483,24 @@ class EntangledQudit:
         # fidelity should be squared!
         return (fidelity(traced_state, ket2dm(bell_state).unit()))**2
 
+    def get_initial_state_qutip(self, m_i, gamma_loss, gamma_dephasing):
+        Delta_i = self.d_A / m_i
+        initial = tensor(fock_dm(self.d_A, 0), fock_dm(self.d_B, 0)) * 0
+        for s_A,s_B,l_A,l_B in itertools.product(range(-self.d_A//2,self.d_A//2),range(-self.d_B//2,self.d_B//2),range(self.d_A),range(self.d_B)):
+            # print(f"{s_A=}, {s_B=}, {l_A=}, {l_B=}")
+            state = ket2dm(sum([np.exp(2j * np.pi * (l_A+l_B) * Delta_i * k / self.d_A) *
+                                tensor(basis(self.d_A, int((Delta_i * (k+1/2)+s_A) % self.d_A)),
+                                       basis(self.d_B, int((Delta_i * (k+1/2)+s_B) % self.d_B)))
+                                for k in range(m_i)]))
+            # print(initial)
+            # print(state)
+            initial += self.p(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing, s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B) * state
+        return initial.unit()
+            
+    def get_conditional_entropy(self, m_i, gamma_loss, gamma_dephasing):
+        initial = self.get_initial_state_qutip(m_i, gamma_loss, gamma_dephasing)
+        
+
     def transform_to_fourier_basis(self, qudit: Qobj, reverse=False):
         plus_basis_list1 = []
         plus_basis_list2 = []
