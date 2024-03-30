@@ -394,7 +394,8 @@ class EntangledQudit:
         else:
             y_A = A_2
             y_B = B_2
-            v_B = (y_A-y_B) / (m_c/2)  # guess I should change here
+            v_B = 0 if B_2 <= 0 else 1 # / (m_c/2) #  (y_A-y_B) / (m_c/2)  # guess I should change here
+            print(B_2, v_B)
         # good_l_A_B_list = [(l_A, l_B) for l_A, l_B in l_A_B_list
         #                    if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
         good_l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
