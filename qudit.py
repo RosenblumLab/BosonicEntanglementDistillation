@@ -3,7 +3,14 @@ from qutip import *
 import numpy as np
 from scipy.special import erf
 from functools import lru_cache
+import time
+# import qutip_cupy
 # from memory_profiler import profile
+# from numba import njit
+import cupy as cp
+import scipy.sparse as sp
+import cupyx.scipy.sparse as cxs
+
 
 from scipy import stats
 
@@ -90,29 +97,177 @@ class EntangledBosonicQudit:
         BQ = BosonicQudit(N,d1,res=res)
         self.basis_dict, self.phi_list = BQ.create_basis_dictionary(self.res, base_state_list)
 
-    def cavity_to_entangled_qudits(self, rho):
-        """
-
-        :param rho:
-        :return:
-        """
+    def cavity_to_entangled_qudits_dense_gpu(self, rho):
         if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
             print("warning: wrong dimension of density matrix")
         d = self.d1
         # sigma = tensor(qeye(d), qeye(d))
-        sigma = np.zeros([d*d, d*d])
+        sigma = np.zeros([d*d, d*d], dtype=np.complex128)
+        dphi = 2 * np.pi / d / self.res
+        
+        basis_dict_np = {key: np.array(value.full()) for key, value in self.basis_dict.items()}
+        rho_np = np.array(rho.full()) if isinstance(rho, qutip.Qobj) else rho
+
+        for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
+            time0 = time.time()
+
+            i_A_vector_list = [ basis_dict_np[(i_A, phi)] for phi in self.phi_list ]
+            i_B_vector_list = [ basis_dict_np[(i_B, phi)] for phi in self.phi_list ]
+            j_A_vector_list = [ basis_dict_np[(j_A, phi)] for phi in self.phi_list ]
+            j_B_vector_list = [ basis_dict_np[(j_B, phi)] for phi in self.phi_list ]
+            
+            total_sum = 0
+            for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
+                for i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
+                    ang = np.kron(i_A_phi, i_B_phi)
+                    ang2 = np.kron(j_A_phi, j_B_phi)
+
+                    total_sum += (ang.conj().T @ rho_np @ ang2)[0,0]
+
+            duration = time.time() - time0
+            print("dense gpu:", duration)
+            time0 = time.time()
+            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * total_sum
+
+        return Qobj(sigma).unit()
+    
+    
+    def cavity_to_entangled_qudits_sparse_gpu(self, rho):
+        if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
+            print("warning: wrong dimension of density matrix")
+        d = self.d1
+        sigma = np.zeros([d*d, d*d], dtype=np.complex128)
+        dphi = 2 * np.pi / d / self.res
+        
+        basis_dict_sp = {key: cxs.csr_matrix(sp.csr_matrix(value.full())) for key, value in self.basis_dict.items()}
+        # rho_np = np.array(rho.full()) if isinstance(rho, qutip.Qobj) else rho
+        rho_sp = sp.csr_matrix(rho.data)
+        rho_cs = cxs.csr_matrix(rho_sp)
+        # rho_np = cp.asarray(rho_np)
+    
+        
+        for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
+            print(i_A, i_B, j_A, j_B)
+
+            
+            
+            i_A_vector_list = [ (basis_dict_sp[(i_A, phi)]) for phi in self.phi_list ]
+            i_B_vector_list = [ (basis_dict_sp[(i_B, phi)]) for phi in self.phi_list ]
+            j_A_vector_list = [ (basis_dict_sp[(j_A, phi)]) for phi in self.phi_list ]
+            j_B_vector_list = [ (basis_dict_sp[(j_B, phi)]) for phi in self.phi_list ]
+
+
+            ang = cxs.kron(i_A_vector_list[0],i_B_vector_list[0])
+            ang2 = cxs.kron(j_A_vector_list[1],j_B_vector_list[1])
+
+            time0 = time.time()
+            
+            total_sum = 0
+            # for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
+            for i in range(16):
+                for i in range(16):  #i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
+                    # time_kron = time.time()
+                    # ang = cxs.kron(i_A_phi, i_B_phi)
+                    # ang2 = cxs.kron(j_A_phi, j_B_phi)
+                    # durationkron = time.time() - time_kron
+                    # print("kron time", durationkron)
+                    # time2 = time.time()
+                    intermediate_product = rho_cs @ ang2
+                    # result = ang.conj().T.dot(intermediate_product)[0,0]
+                            
+                    # total_sum += result
+                    
+                    # duration1 = time.time() - time2
+                    # print("mul time", duration1)
+            duration = time.time() - time0
+            
+            print("sparse gpu", duration)
+
+            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * total_sum
+
+        return Qobj(sigma).unit()
+
+    # @staticmethod
+    # def _jit_summing_for_(rho_cs, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list):
+    #     # i_list = []
+    #     # j_list = []
+    #     total_sum = 0
+    #     for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
+    #         for i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
+    #             ang = cxs.kron(i_A_phi, i_B_phi).tocsr()
+    #             ang2 = cxs.kron(j_A_phi, j_B_phi).tocsr()
+
+    #             # Compute the intermediate product with rho
+    #             intermediate_product = rho_cs @ ang2
+        
+    #             # Compute the dot product with ang.conj().T
+    #             result = ang.conj().T.dot(intermediate_product)[0,0]
+        
+    #             total_sum += result
+    #     #         # print(ang.data)
+    #     #         # print(ang.dag() * rho * ang)
+    #     #         # print(ang2.shape)
+    #     #         # print(rho_np.shape)
+    #             # total_sum += (ang.conj().T @ rho_sp @ ang2)
+    #     # i_list = np.array(i_list)
+    #     # j_list = np.array(j_list)
+
+    #     # i_list = cp.einsum('ik, in -> ikn', i_A_vector_list, i_B_vector_list).reshape(len(i_A_vector_list), -1)
+    #     # j_list = cp.einsum('ik, in -> ikn', j_A_vector_list, j_B_vector_list).reshape(len(i_A_vector_list), -1).conj()
+    #     # print(f"{i_list.shape=}")
+    #     # print(i_list[0,:])
+    #     # print(np.kron(i_A_vector_list[0], i_B_vector_list[0]))
+    #     # print(f"{rho_np.shape=}")
+    #     # print(f"{j_list.shape=}")
+    #     return total_sum
+    #     # return cp.einsum('ij, jk, ik', i_list,rho_np,j_list)
+
+    #     # tensor(self.basis_dict[(i_A, phi_A)], self.basis_dict[(i_B, phi_B)]).dag()
+    #     #                               * rho *
+    #     #                               tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
+
+    #     return sigma
+
+    def cavity_to_entangled_qudits_qutip(self, rho):
+        if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
+            print("warning: wrong dimension of density matrix")
+        d = self.d1
+        sigma = np.zeros([d*d, d*d], dtype=np.complex128)
 
         dphi = 2 * np.pi / d / self.res
         for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
+            # print(i_A, i_B, j_A, j_B)
+            # time0 = time.time()
             sigma[i_A * d + i_B, j_A * d + j_B] = dphi * sum([tensor(self.basis_dict[(i_A, phi_A)],
                                                                      self.basis_dict[(i_B, phi_B)]).dag()
                                       * rho *
                                       tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
                                       for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])[0][0][0]
+            # duration = time.time() - time0
+            # print("qutip loop", duration)
         return Qobj(sigma).unit()
 
+    def cavity_to_entangled_qudits_selected(self, rho, A2, B2):
+        if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
+            print("warning: wrong dimension of density matrix")
+        d = self.d1
+        sigma = np.zeros([d*d, d*d], dtype=np.complex128)
 
-        return sigma
+        i_A_list = [A2, A2+d//2]
+        i_B_list = [B2, B2+d//2]
+
+        dphi = 2 * np.pi / d / self.res
+        for i_A, i_B, j_A, j_B in itertools.product(i_A_list, i_B_list, i_A_list, i_B_list):
+            # print(i_A, i_B, j_A, j_B)
+            # time0 = time.time()
+            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * sum([tensor(self.basis_dict[(i_A, phi_A)],
+                                                                     self.basis_dict[(i_B, phi_B)]).dag()
+                                      * rho *
+                                      tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
+                                      for phi_A, phi_B in itertools.product(self.phi_list, self.phi_list)])[0][0][0]
+            # duration = time.time() - time0
+            # print("qutip loop", duration)
+        return Qobj(sigma).unit()
 
 class Qudit:
     def __init__(self,d):
@@ -239,7 +394,8 @@ class EntangledQudit:
         else:
             y_A = A_2
             y_B = B_2
-            v_B = (y_A-y_B) / (m_c/2)  # guess I should change here
+            v_B = 0 if B_2 <= 0 else 1 # / (m_c/2) #  (y_A-y_B) / (m_c/2)  # guess I should change here
+            print(B_2, v_B)
         # good_l_A_B_list = [(l_A, l_B) for l_A, l_B in l_A_B_list
         #                    if (l_A+l_B) == (-(A_2+B_2) % int(m_c/2))]
         good_l_A_B_list = [(l_A, l_B) for l_A, l_B in itertools.product(l_A_list, l_B_list)
@@ -327,6 +483,24 @@ class EntangledQudit:
         bell_state = (tensor(basis(2, 0), basis(2, 0)) + tensor(basis(2, 1), basis(2, 1))).unit()
         # fidelity should be squared!
         return (fidelity(traced_state, ket2dm(bell_state).unit()))**2
+
+    def get_initial_state_qutip(self, m_i, gamma_loss, gamma_dephasing):
+        Delta_i = self.d_A / m_i
+        initial = tensor(fock_dm(self.d_A, 0), fock_dm(self.d_B, 0)) * 0
+        for s_A,s_B,l_A,l_B in itertools.product(range(-self.d_A//2,self.d_A//2),range(-self.d_B//2,self.d_B//2),range(self.d_A),range(self.d_B)):
+            # print(f"{s_A=}, {s_B=}, {l_A=}, {l_B=}")
+            state = ket2dm(sum([np.exp(2j * np.pi * (l_A+l_B) * Delta_i * k / self.d_A) *
+                                tensor(basis(self.d_A, int((Delta_i * (k+1/2)+s_A) % self.d_A)),
+                                       basis(self.d_B, int((Delta_i * (k+1/2)+s_B) % self.d_B)))
+                                for k in range(m_i)]))
+            # print(initial)
+            # print(state)
+            initial += self.p(gamma_loss_A=gamma_loss, gamma_dephasing_A=gamma_dephasing, s_A=s_A, s_B=s_B, l_A=l_A, l_B=l_B) * state
+        return initial.unit()
+            
+    def get_conditional_entropy(self, m_i, gamma_loss, gamma_dephasing):
+        initial = self.get_initial_state_qutip(m_i, gamma_loss, gamma_dephasing)
+        
 
     def transform_to_fourier_basis(self, qudit: Qobj, reverse=False):
         plus_basis_list1 = []
