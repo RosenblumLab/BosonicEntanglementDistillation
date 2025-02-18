@@ -7,9 +7,9 @@ import time
 # import qutip_cupy
 # from memory_profiler import profile
 # from numba import njit
-import cupy as cp
+# import cupy as cp
 import scipy.sparse as sp
-import cupyx.scipy.sparse as cxs
+# import cupyx.scipy.sparse as cxs
 
 
 from scipy import stats
@@ -131,102 +131,6 @@ class EntangledBosonicQudit:
 
         return Qobj(sigma).unit()
     
-    
-    def cavity_to_entangled_qudits_sparse_gpu(self, rho):
-        if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
-            print("warning: wrong dimension of density matrix")
-        d = self.d1
-        sigma = np.zeros([d*d, d*d], dtype=np.complex128)
-        dphi = 2 * np.pi / d / self.res
-        
-        basis_dict_sp = {key: cxs.csr_matrix(sp.csr_matrix(value.full())) for key, value in self.basis_dict.items()}
-        # rho_np = np.array(rho.full()) if isinstance(rho, qutip.Qobj) else rho
-        rho_sp = sp.csr_matrix(rho.data)
-        rho_cs = cxs.csr_matrix(rho_sp)
-        # rho_np = cp.asarray(rho_np)
-    
-        
-        for i_A, i_B, j_A, j_B in itertools.product(range(d), range(d), range(d), range(d)):
-            print(i_A, i_B, j_A, j_B)
-
-            
-            
-            i_A_vector_list = [ (basis_dict_sp[(i_A, phi)]) for phi in self.phi_list ]
-            i_B_vector_list = [ (basis_dict_sp[(i_B, phi)]) for phi in self.phi_list ]
-            j_A_vector_list = [ (basis_dict_sp[(j_A, phi)]) for phi in self.phi_list ]
-            j_B_vector_list = [ (basis_dict_sp[(j_B, phi)]) for phi in self.phi_list ]
-
-
-            ang = cxs.kron(i_A_vector_list[0],i_B_vector_list[0])
-            ang2 = cxs.kron(j_A_vector_list[1],j_B_vector_list[1])
-
-            time0 = time.time()
-            
-            total_sum = 0
-            # for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
-            for i in range(16):
-                for i in range(16):  #i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
-                    # time_kron = time.time()
-                    # ang = cxs.kron(i_A_phi, i_B_phi)
-                    # ang2 = cxs.kron(j_A_phi, j_B_phi)
-                    # durationkron = time.time() - time_kron
-                    # print("kron time", durationkron)
-                    # time2 = time.time()
-                    intermediate_product = rho_cs @ ang2
-                    # result = ang.conj().T.dot(intermediate_product)[0,0]
-                            
-                    # total_sum += result
-                    
-                    # duration1 = time.time() - time2
-                    # print("mul time", duration1)
-            duration = time.time() - time0
-            
-            print("sparse gpu", duration)
-
-            sigma[i_A * d + i_B, j_A * d + j_B] = dphi * total_sum
-
-        return Qobj(sigma).unit()
-
-    # @staticmethod
-    # def _jit_summing_for_(rho_cs, i_A_vector_list, j_A_vector_list, i_B_vector_list, j_B_vector_list):
-    #     # i_list = []
-    #     # j_list = []
-    #     total_sum = 0
-    #     for i_A_phi, j_A_phi in zip(i_A_vector_list,j_A_vector_list):
-    #         for i_B_phi, j_B_phi in zip(i_B_vector_list,j_B_vector_list):
-    #             ang = cxs.kron(i_A_phi, i_B_phi).tocsr()
-    #             ang2 = cxs.kron(j_A_phi, j_B_phi).tocsr()
-
-    #             # Compute the intermediate product with rho
-    #             intermediate_product = rho_cs @ ang2
-        
-    #             # Compute the dot product with ang.conj().T
-    #             result = ang.conj().T.dot(intermediate_product)[0,0]
-        
-    #             total_sum += result
-    #     #         # print(ang.data)
-    #     #         # print(ang.dag() * rho * ang)
-    #     #         # print(ang2.shape)
-    #     #         # print(rho_np.shape)
-    #             # total_sum += (ang.conj().T @ rho_sp @ ang2)
-    #     # i_list = np.array(i_list)
-    #     # j_list = np.array(j_list)
-
-    #     # i_list = cp.einsum('ik, in -> ikn', i_A_vector_list, i_B_vector_list).reshape(len(i_A_vector_list), -1)
-    #     # j_list = cp.einsum('ik, in -> ikn', j_A_vector_list, j_B_vector_list).reshape(len(i_A_vector_list), -1).conj()
-    #     # print(f"{i_list.shape=}")
-    #     # print(i_list[0,:])
-    #     # print(np.kron(i_A_vector_list[0], i_B_vector_list[0]))
-    #     # print(f"{rho_np.shape=}")
-    #     # print(f"{j_list.shape=}")
-    #     return total_sum
-    #     # return cp.einsum('ij, jk, ik', i_list,rho_np,j_list)
-
-    #     # tensor(self.basis_dict[(i_A, phi_A)], self.basis_dict[(i_B, phi_B)]).dag()
-    #     #                               * rho *
-    #     #                               tensor(self.basis_dict[(j_A, phi_A)], self.basis_dict[(j_B, phi_B)])
-
-    #     return sigma
 
     def cavity_to_entangled_qudits_qutip(self, rho):
         if(rho.dims!=[[self.N,self.N],[self.N,self.N]]):
