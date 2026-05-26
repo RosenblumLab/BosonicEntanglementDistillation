@@ -4,6 +4,8 @@
 *.xml
 *.pyc
 *.pyc
+*.egg-info/
+*.egg-info
 .ipynb_checkpoints/playground2-checkpoint.ipynb
 .ipynb_checkpoints/discrete_simulation-checkpoint.py
 .ipynb_checkpoints/distillation_first_simulation-checkpoint.ipynb
@@ -18,3 +20,5 @@ __pycache__/qudit.cpython-39.pyc
 **/.ipynb_checkpoints/
 **/.ipynb_checkpoints/*
 keybindings.json
+.codex
+uv.lock
