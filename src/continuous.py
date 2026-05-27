@@ -19,16 +19,16 @@ class ContinuousProtocol:
         self.decode_base_list = self._create_base_list()
 
     def simulate_fidelity_specific(self, A1, B1, A2, B2, gamma_loss, gamma_dephasing, decode_res=10, noisy_state = None):
-        print(f"start, {A1=}, {B1=}, {A2=}, {B2=}")
+        # print(f"start, {A1=}, {B1=}, {A2=}, {B2=}")
         if not noisy_state:
             time0 = time.time()
             initial_state = self._create_initial_state()
             duration = time.time() - time0
-            print("state creation time:", duration)
+            # print("state creation time:", duration)
             time0 = time.time()
             noisy_state = self._add_noise(initial_state, gamma_loss, gamma_dephasing)
             duration = time.time() - time0
-            print("state noise time:", duration)
+            # print("state noise time:", duration)
         self.noisy_state=noisy_state
         time0 = time.time()
         M1 = tensor(self._create_phase_parity_measurement(A1), self._create_phase_parity_measurement(B1))
@@ -36,19 +36,19 @@ class ContinuousProtocol:
         U1 = self._create_phase_rotation(A1, B1)
 
         duration = time.time() - time0
-        print("operator creation time:", duration)
+        # print("operator creation time:", duration)
         # plot_wigner((M1 * noisy_state * M1.dag()).ptrace(0))
         time0 = time.time()
         state1 = M2 * M1 * noisy_state * M1.dag() * M2.dag()
         self.state_after_meas = state1
         
-        print("before rotation")
+        # print("before rotation")
         # plot_wigner(state1.ptrace(0))
         # plot_wigner(state1.ptrace(1))
         self.final = U1 * state1 * U1.dag()
 
         duration = time.time() - time0
-        print("matrix multiplication time:", duration)
+        # print("matrix multiplication time:", duration)
         time0 = time.time()
         # print("after rotation")
         # plot_wigner(state2.ptrace(0))
@@ -61,7 +61,7 @@ class ContinuousProtocol:
         # self.decoded_qudit = self.BosonicObject.cavity_to_entangled_qudits_qutip(self.final)
         self.decoded_qudit = self.BosonicObject.cavity_to_entangled_qudits_selected(self.final, A2, B2)
         duration = time.time() - time0
-        print("decoding time:", duration)
+        # print("decoding time:", duration)
 
         psi_p = (tensor(basis(2,1),basis(2,0)) + tensor(basis(2,0),basis(2,1))).unit()
         phi_p = (tensor(basis(2,0),basis(2,0)) + tensor(basis(2,1),basis(2,1))).unit()
@@ -72,7 +72,7 @@ class ContinuousProtocol:
                                fidelity(self.decoded_qudit.ptrace([0,int(np.log2(self.m_c))]),psi_p)**2)
         
         probability = np.trace(M2 * M1 * noisy_state)
-        print(f"{probability=}")
+        # print(f"{probability=}")
 
         return fid_max, probability
 
@@ -127,7 +127,7 @@ class ContinuousProtocol:
         rotation = lambda theta: (theta * 1.0j * num(self.N)).expm()
         U_A = rotation(-A1 / self.res * 2 * np.pi)
         s_B = min([B1 - delta_c, B1, B1 + delta_c], key=lambda x: abs(A1-x))
-        print(f"{s_B=}")
+        # print(f"{s_B=}")
         U_B = rotation(-s_B / self.res * 2 * np.pi)
         return tensor(U_A, U_B)
 
