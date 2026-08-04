@@ -16,7 +16,7 @@ class ContinuousProtocol:
         self.res = res
         self.m_i = m_i
         self.m_c = m_c
-        # self.decode_base_list = self._create_base_list()
+        self.decode_base_list = self._create_base_list()
 
     def simulate_fidelity_specific(self, A1, B1, A2, B2, gamma_loss, gamma_dephasing, decode_res=10, noisy_state = None):
         # print(f"start, {A1=}, {B1=}, {A2=}, {B2=}")

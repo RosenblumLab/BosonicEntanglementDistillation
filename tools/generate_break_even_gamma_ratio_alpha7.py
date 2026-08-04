@@ -133,7 +133,13 @@ def run_discrete(
     return [tup[0] for tup in fid_prob], [tup[1] for tup in fid_prob]
 
 
-def run_continuous(ratio: float, gamma_loss_list: np.ndarray, *, use_squeezed: bool):
+def run_continuous(
+    ratio: float,
+    gamma_loss_list: np.ndarray,
+    processes: int,
+    *,
+    use_squeezed: bool,
+):
     sim = ContinuousSimulation(
         N,
         D,
@@ -144,13 +150,19 @@ def run_continuous(ratio: float, gamma_loss_list: np.ndarray, *, use_squeezed: b
         decode_res=DECODE_RES,
         squeezed=SQUEEZED if use_squeezed else 0,
     )
-    fid_prob = []
+    jobs = [
+        (gamma_loss, gamma_dephasing, FIDELITY_CUT)
+        for gamma_loss, gamma_dephasing in gamma_pairs_for_ratio(ratio, gamma_loss_list)
+    ]
     description = f"continuous squeezed={use_squeezed}, ratio={ratio:g}"
-    for gamma_loss, gamma_dephasing in tqdm(
-        gamma_pairs_for_ratio(ratio, gamma_loss_list),
-        desc=description,
-    ):
-        fid_prob.append(sim.average_fidelity(gamma_loss, gamma_dephasing, FIDELITY_CUT))
+    with mp.Pool(processes) as pool:
+        fid_prob = list(
+            tqdm(
+                pool.starmap(sim.average_fidelity, jobs),
+                total=len(jobs),
+                desc=description,
+            )
+        )
     return [tup[0] for tup in fid_prob], [tup[1] for tup in fid_prob]
 
 
@@ -159,6 +171,7 @@ def compute_or_resume_ratio(
     *,
     force: bool,
     discrete_processes: int,
+    continuous_processes: int,
     metadata: dict[str, float],
     gamma_loss_list: np.ndarray,
 ) -> dict:
@@ -217,11 +230,21 @@ def compute_or_resume_ratio(
         ),
         (
             ("fid_continuous", "prob_continuous"),
-            lambda: run_continuous(ratio, gamma_loss_list, use_squeezed=False),
+            lambda: run_continuous(
+                ratio,
+                gamma_loss_list,
+                continuous_processes,
+                use_squeezed=False,
+            ),
         ),
         (
             ("fid_continuous_sq", "prob_continuous_sq"),
-            lambda: run_continuous(ratio, gamma_loss_list, use_squeezed=True),
+            lambda: run_continuous(
+                ratio,
+                gamma_loss_list,
+                continuous_processes,
+                use_squeezed=True,
+            ),
         ),
     ]
 
@@ -254,8 +277,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--discrete-processes",
         type=int,
-        default=min(20, mp.cpu_count()),
+        default=mp.cpu_count(),
         help="Number of worker processes for discrete simulations.",
+    )
+    parser.add_argument(
+        "--continuous-processes",
+        type=int,
+        default=mp.cpu_count(),
+        help="Number of worker processes for continuous simulations.",
     )
     parser.add_argument(
         "--force",
@@ -296,6 +325,7 @@ def main() -> None:
             ratio,
             force=args.force,
             discrete_processes=args.discrete_processes,
+            continuous_processes=args.continuous_processes,
             metadata=metadata,
             gamma_loss_list=gamma_loss_list,
         )
