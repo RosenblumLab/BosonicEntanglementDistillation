@@ -29,5 +29,6 @@ py-modules = [
   "continuous",
   "discrete_simulation",
   "measurements",
+  "other_measurements",
   "qudit",
 ]
