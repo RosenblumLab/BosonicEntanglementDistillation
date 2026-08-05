@@ -6,6 +6,7 @@ Run from the repository root:
     python tools/plot_adaptive_homodyne_phase_matrices.py
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -20,8 +21,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from other_measurements import adaptive_homodyne_phase_matrix
 
 
-DIMENSIONS = (10, 20, 40, 80)
+DIMENSIONS = (10, 20, 40, 80, 220)
 OUTPUT_STEM = ROOT / "plots" / "adaptive_homodyne_phase_matrix_heatmaps"
+HIGH_PRECISION_CACHE = (
+    ROOT / "results" / "adaptive_homodyne_phase_matrix_N=220.npz"
+)
 FONT_SIZE = 12
 
 
@@ -37,19 +41,37 @@ def main() -> None:
         }
     )
 
-    phase_matrices = {
-        dimension: adaptive_homodyne_phase_matrix(dimension)
-        for dimension in DIMENSIONS
-    }
+    phase_matrices = {}
+    for dimension in DIMENSIONS:
+        print(f"Computing adaptive-homodyne phase matrix for N={dimension}...")
+        options = {}
+        if dimension == 220:
+            options = {
+                "cache_path": HIGH_PRECISION_CACHE,
+                "calculation_method": "mpmath",
+                "mp_dps": 50,
+                "mp_workers": min(64, os.cpu_count() or 1),
+            }
+        phase_matrices[dimension] = adaptive_homodyne_phase_matrix(
+            dimension, **options
+        )
 
-    fig, axes = plt.subplots(
+    fig = plt.figure(figsize=(10.2, 6.2), constrained_layout=True)
+    grid = fig.add_gridspec(
         2,
-        2,
-        figsize=(7.2, 6.2),
-        constrained_layout=True,
+        7,
+        width_ratios=(1, 1, 1, 1, 1, 1, 0.08),
     )
+    axes = [
+        fig.add_subplot(grid[0, 0:2]),
+        fig.add_subplot(grid[0, 2:4]),
+        fig.add_subplot(grid[0, 4:6]),
+        fig.add_subplot(grid[1, 1:3]),
+        fig.add_subplot(grid[1, 3:5]),
+    ]
+    colorbar_axis = fig.add_subplot(grid[:, 6])
     image = None
-    for axis, dimension in zip(axes.flat, DIMENSIONS):
+    for axis, dimension in zip(axes, DIMENSIONS):
         image = axis.imshow(
             phase_matrices[dimension],
             origin="lower",
@@ -68,7 +90,7 @@ def main() -> None:
         axis.set_title(rf"$N={dimension}$")
         axis.set_aspect("equal")
 
-    colorbar = fig.colorbar(image, ax=axes, pad=0.03, shrink=0.94)
+    colorbar = fig.colorbar(image, cax=colorbar_axis)
     colorbar.set_label(r"$H_{nm}^{\mathrm{ahd}}$")
 
     OUTPUT_STEM.parent.mkdir(parents=True, exist_ok=True)

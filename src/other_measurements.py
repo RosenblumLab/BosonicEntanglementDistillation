@@ -6,9 +6,11 @@ adaptive-homodyne phase matrix follows Appendix C of arXiv:2108.01009 and
 describes the ideal Mark-II scheme with instantaneous local-oscillator feedback.
 """
 
+import multiprocessing as mp_process
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
+import mpmath as mp
 import numpy as np
 import qutip as qt
 from scipy.special import gammaln
@@ -16,7 +18,7 @@ from scipy.special import gammaln
 from measurements import POVM
 
 
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2
 _AUTOMATIC_CUTOFF = -1
 _MAX_AUTOMATIC_REFINEMENTS = 100
 
@@ -382,6 +384,186 @@ def _compute_adaptive_homodyne_phase_matrix(
     raise AssertionError("unreachable adaptive-homodyne cutoff loop")
 
 
+_MP_MOMENTS = None
+_MP_GAMMAS = None
+_MP_BINOMIALS = None
+
+
+def _mp_moment_table(maximum_index: int):
+    moments = [
+        [mp.mpf(0) for _ in range(maximum_index + 1)]
+        for _ in range(maximum_index + 1)
+    ]
+    moments[0][0] = mp.mpf(1)
+    for index in range(1, maximum_index + 1):
+        moments[index][0] = moments[index - 1][0] / (2 * index + 1)
+        moments[0][index] = moments[index][0]
+    for n in range(1, maximum_index + 1):
+        for m in range(1, maximum_index + 1):
+            denominator = 2 * (n - m) ** 2 + n + m
+            moments[n][m] = (
+                n * moments[n - 1][m] + m * moments[n][m - 1]
+            ) / denominator
+    return moments
+
+
+def _mp_gamma_coefficients(number: int):
+    coefficients = [1 / mp.sqrt(mp.factorial(number))]
+    for p in range(number // 2):
+        coefficients.append(
+            coefficients[-1]
+            * (number - 2 * p)
+            * (number - 2 * p - 1)
+            / (2 * (p + 1))
+        )
+    return coefficients
+
+
+def _mp_generalized_binomial_sequence(difference: int, cutoff: int):
+    alpha = mp.mpf(difference) / 2
+    coefficients = [mp.mpf(1)]
+    for index in range(1, cutoff + 1):
+        coefficient = coefficients[-1] * (alpha - index + 1) / index
+        if coefficient == 0:
+            break
+        coefficients.append(coefficient)
+    return coefficients
+
+
+def _mp_convolve(left, right):
+    result = [mp.mpf(0)] * (len(left) + len(right) - 1)
+    for left_index, left_value in enumerate(left):
+        for right_index, right_value in enumerate(right):
+            result[left_index + right_index] += left_value * right_value
+    return result
+
+
+def _initialize_mpmath_worker(
+    dimension: int,
+    cutoff: int,
+    decimal_precision: int,
+) -> None:
+    global _MP_MOMENTS, _MP_GAMMAS, _MP_BINOMIALS
+    mp.mp.dps = decimal_precision
+    maximum_moment_index = (dimension - 1) // 2 + cutoff
+    _MP_MOMENTS = _mp_moment_table(maximum_moment_index)
+    _MP_GAMMAS = [
+        _mp_gamma_coefficients(number) for number in range(dimension)
+    ]
+    _MP_BINOMIALS = {
+        difference: _mp_generalized_binomial_sequence(difference, cutoff)
+        for difference in range(-(dimension - 1), dimension)
+    }
+
+
+def _mp_adaptive_homodyne_element(m: int, n: int):
+    if _MP_MOMENTS is None or _MP_GAMMAS is None or _MP_BINOMIALS is None:
+        raise RuntimeError("mpmath adaptive-homodyne worker is not initialized")
+    difference = n - m
+    left = _mp_convolve(_MP_GAMMAS[m], _MP_BINOMIALS[difference])
+    right = _mp_convolve(_MP_GAMMAS[n], _MP_BINOMIALS[-difference])
+    transformed_right = [
+        mp.fdot(row[: len(right)], right)
+        for row in _MP_MOMENTS[: len(left)]
+    ]
+    return mp.fdot(left, transformed_right)
+
+
+def _mp_adaptive_homodyne_worker(
+    pair: Tuple[int, int]
+) -> Tuple[int, int, float]:
+    m, n = pair
+    return m, n, float(_mp_adaptive_homodyne_element(m, n))
+
+
+def _mp_sample_elements(
+    dimension: int,
+    cutoff: int,
+    decimal_precision: int,
+) -> Dict[Tuple[int, int], float]:
+    _initialize_mpmath_worker(dimension, cutoff, decimal_precision)
+    return {
+        pair: float(_mp_adaptive_homodyne_element(*pair))
+        for pair in _convergence_pairs(dimension)
+    }
+
+
+def _compute_mpmath_adaptive_homodyne_phase_matrix(
+    dimension: int,
+    series_cutoff: Optional[int],
+    convergence_increment: int,
+    convergence_tolerance: float,
+    decimal_precision: int,
+    workers: int,
+) -> Tuple[np.ndarray, int, float]:
+    automatic_cutoff = series_cutoff is None
+    cutoff = dimension - 1 if automatic_cutoff else series_cutoff
+
+    for refinement in range(_MAX_AUTOMATIC_REFINEMENTS + 1):
+        truncated = _mp_sample_elements(
+            dimension, cutoff, decimal_precision
+        )
+        extended = _mp_sample_elements(
+            dimension,
+            cutoff + convergence_increment,
+            decimal_precision,
+        )
+        errors = {
+            pair: abs(truncated[pair] - extended[pair])
+            for pair in truncated
+        }
+        worst_pair = max(errors, key=errors.get) if errors else None
+        convergence_error = errors[worst_pair] if worst_pair is not None else 0.0
+        if convergence_error <= convergence_tolerance:
+            break
+        if not automatic_cutoff:
+            raise RuntimeError(
+                "adaptive-homodyne mpmath series did not converge at "
+                f"series_cutoff={cutoff}: the change at H{worst_pair} is "
+                f"{convergence_error:.3e}, exceeding "
+                f"convergence_tolerance={convergence_tolerance:.3e}"
+            )
+        if refinement == _MAX_AUTOMATIC_REFINEMENTS:
+            raise RuntimeError(
+                "adaptive-homodyne mpmath series did not converge after "
+                f"{_MAX_AUTOMATIC_REFINEMENTS} automatic refinements"
+            )
+        cutoff += convergence_increment
+
+    pairs = [
+        (m, n)
+        for m in range(dimension)
+        for n in range(m + 1, dimension)
+    ]
+    phase_matrix = np.eye(dimension, dtype=float)
+    if workers == 1 or not pairs:
+        _initialize_mpmath_worker(dimension, cutoff, decimal_precision)
+        values = map(_mp_adaptive_homodyne_worker, pairs)
+        for m, n, value in values:
+            phase_matrix[m, n] = value
+            phase_matrix[n, m] = value
+    else:
+        process_count = min(workers, len(pairs))
+        chunksize = max(1, len(pairs) // (16 * process_count))
+        with mp_process.Pool(
+            processes=process_count,
+            initializer=_initialize_mpmath_worker,
+            initargs=(dimension, cutoff, decimal_precision),
+        ) as pool:
+            for m, n, value in pool.imap_unordered(
+                _mp_adaptive_homodyne_worker,
+                pairs,
+                chunksize=chunksize,
+            ):
+                phase_matrix[m, n] = value
+                phase_matrix[n, m] = value
+
+    _validate_phase_matrix(
+        phase_matrix, dimension, convergence_tolerance
+    )
+    return phase_matrix, cutoff, convergence_error
+
+
 def _cache_scalar(cache: np.lib.npyio.NpzFile, name: str):
     if name not in cache.files:
         raise ValueError(f"adaptive-homodyne cache is missing metadata '{name}'")
@@ -397,6 +579,8 @@ def _load_adaptive_homodyne_cache(
     requested_cutoff: int,
     convergence_increment: int,
     convergence_tolerance: float,
+    requested_calculation_method: str,
+    mp_dps: int,
 ) -> np.ndarray:
     try:
         with np.load(cache_path, allow_pickle=False) as cache:
@@ -427,6 +611,35 @@ def _load_adaptive_homodyne_cache(
                 raise ValueError(
                     "adaptive-homodyne cache effective cutoff does not match the "
                     "requested explicit cutoff"
+                )
+            calculation_method = str(
+                _cache_scalar(cache, "calculation_method")
+            )
+            if calculation_method not in {"numpy", "mpmath"}:
+                raise ValueError(
+                    "adaptive-homodyne cache has an invalid calculation_method"
+                )
+            cached_requested_method = str(
+                _cache_scalar(cache, "requested_calculation_method")
+            )
+            if cached_requested_method not in {"auto", "numpy", "mpmath"}:
+                raise ValueError(
+                    "adaptive-homodyne cache has an invalid "
+                    "requested_calculation_method"
+                )
+            requested_backend = requested_calculation_method
+            if requested_backend == "auto":
+                requested_backend = "numpy" if dimension <= 80 else "mpmath"
+            if calculation_method != requested_backend:
+                raise ValueError(
+                    "adaptive-homodyne cache calculation method does not "
+                    "match the requested backend"
+                )
+            cached_mp_dps = int(_cache_scalar(cache, "mp_dps"))
+            if calculation_method == "mpmath" and cached_mp_dps != mp_dps:
+                raise ValueError(
+                    "adaptive-homodyne cache metadata mismatch for mp_dps: "
+                    f"expected {mp_dps}, found {cached_mp_dps}"
                 )
             phase_matrix = np.array(
                 cache["phase_matrix"], dtype=complex, copy=True
@@ -469,6 +682,9 @@ def _write_adaptive_homodyne_cache(
     convergence_increment: int,
     convergence_tolerance: float,
     convergence_error: float,
+    requested_calculation_method: str,
+    calculation_method: str,
+    mp_dps: int,
 ) -> None:
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     diagnostics = _phase_matrix_diagnostics(phase_matrix)
@@ -483,6 +699,9 @@ def _write_adaptive_homodyne_cache(
             convergence_increment=convergence_increment,
             convergence_tolerance=convergence_tolerance,
             convergence_error=convergence_error,
+            requested_calculation_method=requested_calculation_method,
+            calculation_method=calculation_method,
+            mp_dps=mp_dps,
             **diagnostics,
         )
 
@@ -494,17 +713,22 @@ def adaptive_homodyne_phase_matrix(
     convergence_increment: int = 10,
     convergence_tolerance: float = 1e-10,
     cache_path: Optional[Union[str, Path]] = None,
+    calculation_method: str = "auto",
+    mp_dps: int = 50,
+    mp_workers: int = 1,
 ) -> np.ndarray:
     r"""Construct the ideal Mark-II adaptive-homodyne phase matrix.
 
     The Appendix-C double series is reduced to ``u.T @ M @ v`` using two
-    one-dimensional convolutions.  The recurrence and contractions use
-    NumPy's extended floating-point precision to control cancellation without
-    requiring an arbitrary-precision dependency.  With automatic truncation,
-    the initial global cutoff is ``dimension - 1`` (219 for a 220-dimensional
-    Fock space) and is increased, if needed, until representative low-, high-,
-    and off-diagonal entries change by no more than ``convergence_tolerance``
-    when the cutoff is extended by ``convergence_increment``.
+    one-dimensional convolutions.  NumPy's extended floating-point precision
+    is used for dimensions up to 80.
+    Larger matrices use ``mpmath`` because the Maclaurin sums become
+    ill-conditioned in fixed precision.  This selection can be overridden with
+    ``calculation_method="numpy"`` or ``calculation_method="mpmath"``.  With
+    automatic truncation, the initial global cutoff is ``dimension - 1`` (219
+    for a 220-dimensional Fock space) and is increased, if needed, until
+    representative low-, high-, and off-diagonal entries change by no more than
+    ``convergence_tolerance`` when extended by ``convergence_increment``.
 
     A cache is read or written only when ``cache_path`` is supplied.  Existing
     caches are accepted only when their parameters and numerical diagnostics
@@ -519,6 +743,14 @@ def adaptive_homodyne_phase_matrix(
     if not np.isfinite(convergence_tolerance) or convergence_tolerance <= 0:
         raise ValueError("convergence_tolerance must be finite and positive")
     convergence_tolerance = float(convergence_tolerance)
+    if calculation_method not in {"auto", "numpy", "mpmath"}:
+        raise ValueError(
+            "calculation_method must be 'auto', 'numpy', or 'mpmath'"
+        )
+    mp_dps = _positive_integer(mp_dps, "mp_dps")
+    if mp_dps < 20:
+        raise ValueError("mp_dps must be at least 20")
+    mp_workers = _positive_integer(mp_workers, "mp_workers")
     requested_cutoff = (
         _AUTOMATIC_CUTOFF if series_cutoff is None else series_cutoff
     )
@@ -531,16 +763,33 @@ def adaptive_homodyne_phase_matrix(
             requested_cutoff,
             convergence_increment,
             convergence_tolerance,
+            calculation_method,
+            mp_dps,
         )
 
-    phase_matrix, effective_cutoff, convergence_error = (
-        _compute_adaptive_homodyne_phase_matrix(
-            dimension,
-            series_cutoff,
-            convergence_increment,
-            convergence_tolerance,
+    resolved_method = calculation_method
+    if resolved_method == "auto":
+        resolved_method = "numpy" if dimension <= 80 else "mpmath"
+    if resolved_method == "numpy":
+        phase_matrix, effective_cutoff, convergence_error = (
+            _compute_adaptive_homodyne_phase_matrix(
+                dimension,
+                series_cutoff,
+                convergence_increment,
+                convergence_tolerance,
+            )
         )
-    )
+    else:
+        phase_matrix, effective_cutoff, convergence_error = (
+            _compute_mpmath_adaptive_homodyne_phase_matrix(
+                dimension,
+                series_cutoff,
+                convergence_increment,
+                convergence_tolerance,
+                mp_dps,
+                mp_workers,
+            )
+        )
     if path is not None:
         _write_adaptive_homodyne_cache(
             path,
@@ -551,6 +800,9 @@ def adaptive_homodyne_phase_matrix(
             convergence_increment,
             convergence_tolerance,
             convergence_error,
+            calculation_method,
+            resolved_method,
+            mp_dps,
         )
     return phase_matrix
 
@@ -573,6 +825,9 @@ class AdaptiveHomodynePhaseMeasurement(CovariantPhaseMeasurement):
         convergence_increment: int = 10,
         convergence_tolerance: float = 1e-10,
         cache_path: Optional[Union[str, Path]] = None,
+        calculation_method: str = "auto",
+        mp_dps: int = 50,
+        mp_workers: int = 1,
     ):
         if phase_matrix is None:
             phase_matrix = adaptive_homodyne_phase_matrix(
@@ -581,6 +836,9 @@ class AdaptiveHomodynePhaseMeasurement(CovariantPhaseMeasurement):
                 convergence_increment=convergence_increment,
                 convergence_tolerance=convergence_tolerance,
                 cache_path=cache_path,
+                calculation_method=calculation_method,
+                mp_dps=mp_dps,
+                mp_workers=mp_workers,
             )
         super().__init__(
             phase_matrix,

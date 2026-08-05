@@ -111,6 +111,20 @@ class AdaptiveHomodyneTests(unittest.TestCase):
             float(np.min(np.linalg.eigvalsh(phase_matrix))), -1e-10
         )
 
+    def test_mpmath_matches_numpy_backend(self):
+        numpy_matrix = adaptive_homodyne_phase_matrix(
+            4, series_cutoff=80, calculation_method="numpy"
+        )
+        mpmath_matrix = adaptive_homodyne_phase_matrix(
+            4,
+            series_cutoff=80,
+            calculation_method="mpmath",
+            mp_dps=40,
+        )
+        np.testing.assert_allclose(
+            mpmath_matrix, numpy_matrix, atol=1e-13, rtol=1e-13
+        )
+
     def test_cache_round_trip_and_metadata_validation(self):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "adaptive_homodyne.npz"
@@ -132,6 +146,8 @@ class AdaptiveHomodyneTests(unittest.TestCase):
                     "max_diagonal_error",
                     "hermiticity_error",
                     "min_eigenvalue",
+                    "calculation_method",
+                    "mp_dps",
                 }
                 self.assertTrue(required_metadata.issubset(cache.files))
 
