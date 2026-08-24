@@ -31,7 +31,7 @@ from discrete_simulation import ContinuousSimulation, DiscreteSimulation
 RESULTS_DIR = ROOT / "results"
 
 D = 16
-M_I = 8
+M_I = 16
 M_C = 8
 M_F = 2
 ALPHA = 7

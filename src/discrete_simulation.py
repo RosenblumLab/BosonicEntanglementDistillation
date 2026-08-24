@@ -7,12 +7,27 @@ from continuous import *
 
 
 class DiscreteSimulation:
-    def __init__(self, d, m_i, m_c, m_f=2, alpha=1):
+    def __init__(
+        self,
+        d,
+        m_i,
+        m_c,
+        m_f=2,
+        alpha=1,
+        *,
+        qudit_class=Qudit,
+        qudit_kwargs=None,
+    ):
         self.d = d
         self.m_i = m_i
         self.m_c = m_c
         self.m_f = m_f
-        self.enQudit = EntangledQudit(d, d)
+        self.enQudit = EntangledQudit(
+            d,
+            d,
+            qudit_class=qudit_class,
+            qudit_kwargs=qudit_kwargs,
+        )
         self.alpha = alpha
 
     # @profile
@@ -156,4 +171,3 @@ class ContinuousSimulation:
             average_fid = 0
         fail_probability = (prob_sum - good_prob) / prob_sum
         return average_fid, fail_probability
-

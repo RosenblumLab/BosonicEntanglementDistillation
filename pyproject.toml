@@ -21,6 +21,7 @@ notebooks = [
   "ipython",
   "matplotlib",
   "multiprocess",
+  "nbclient",
   "tqdm",
 ]
 

@@ -1,4 +1,5 @@
 import itertools
+import warnings
 from qutip import *
 import numpy as np
 from scipy.special import erf
@@ -13,6 +14,22 @@ import scipy.sparse as sp
 
 
 from scipy import stats
+
+
+def photon_number_distribution_from_state(state):
+    """Return the Fock-basis probabilities of a single-mode QuTiP state."""
+    if not isinstance(state, Qobj):
+        raise TypeError("state must be a QuTiP Qobj")
+
+    if state.isket:
+        return np.abs(state.full().reshape(-1)) ** 2
+    if state.isoper:
+        diagonal = np.diag(state.full())
+        if np.any(np.abs(diagonal.imag) > 1e-12):
+            raise ValueError("density-matrix diagonal must be real")
+        return diagonal.real.copy()
+    raise ValueError("state must be a ket or density matrix")
+
 
 class BosonicQudit:
     def __init__(self, N, d, res=1000, base_state_list=None):
@@ -200,14 +217,95 @@ class Qudit:
                 - erf(np.sqrt(1/(2 * gamma_dephasing)) * (2*s-1) * np.pi / self.d))
 
 
+class PhotonDistributionQudit(Qudit):
+    """Qudit whose loss probabilities come from a supplied Fock distribution."""
+
+    _negative_tolerance = 1e-12
+    _normalization_tolerance = 1e-6
+
+    def __init__(self, d, photon_number_distribution):
+        super().__init__(d)
+        distribution = np.array(photon_number_distribution, copy=True)
+        if distribution.ndim != 1:
+            raise ValueError("photon_number_distribution must be one-dimensional")
+        if np.iscomplexobj(distribution):
+            raise ValueError("photon_number_distribution must be real")
+
+        distribution = distribution.astype(float, copy=False)
+        if not np.all(np.isfinite(distribution)):
+            raise ValueError("photon_number_distribution must be finite")
+        if np.any(distribution < -self._negative_tolerance):
+            raise ValueError("photon_number_distribution must be nonnegative")
+        distribution[distribution < 0] = 0
+
+        total = distribution.sum()
+        if not np.isfinite(total) or total <= 0:
+            raise ValueError("photon_number_distribution must have finite positive weight")
+        if total > 1 + self._normalization_tolerance:
+            raise ValueError("photon_number_distribution has total weight greater than one")
+        if total < 1 - self._normalization_tolerance:
+            warnings.warn(
+                f"photon_number_distribution has total weight {total:.8g}; normalizing it",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        self._photon_number_distribution = distribution / total
+
+    @property
+    def photon_number_distribution(self):
+        return self._photon_number_distribution.copy()
+
+    @lru_cache(maxsize=10000000)
+    def p_loss(self, gamma_loss: float, loss_times: int, alpha=1):
+        """Return the probability of the loss shift ``loss_times`` modulo ``d``."""
+        if not np.isscalar(gamma_loss) or np.iscomplexobj(gamma_loss):
+            raise ValueError("gamma_loss must be a real number in [0, 1]")
+        gamma_loss = float(gamma_loss)
+        if not np.isfinite(gamma_loss) or not 0 <= gamma_loss <= 1:
+            raise ValueError("gamma_loss must be in [0, 1]")
+        if loss_times < 0 or loss_times >= self.d:
+            return 0
+
+        distribution = self._loss_shift_distribution(gamma_loss)
+        return distribution[loss_times]
+
+    @lru_cache(maxsize=1000)
+    def _loss_shift_distribution(self, gamma_loss):
+        photon_numbers = np.arange(len(self._photon_number_distribution))
+        if gamma_loss == 0:
+            loss_probabilities = np.zeros_like(photon_numbers, dtype=float)
+            loss_probabilities[0] = 1
+        elif gamma_loss == 1:
+            loss_probabilities = self._photon_number_distribution
+        else:
+            loss_counts = photon_numbers[:, np.newaxis]
+            conditional_probabilities = stats.binom.pmf(
+                loss_counts,
+                photon_numbers[np.newaxis, :],
+                gamma_loss,
+            )
+            loss_probabilities = (
+                conditional_probabilities * self._photon_number_distribution
+            ).sum(axis=1)
+
+        return tuple(
+            np.bincount(
+                photon_numbers % self.d,
+                weights=loss_probabilities,
+                minlength=self.d,
+            )
+        )
+
 
 class EntangledQudit:
 
-    def __init__(self, d_A, d_B=None):
+    def __init__(self, d_A, d_B=None, *, qudit_class=Qudit, qudit_kwargs=None):
         self.d_A = d_A
-        self.quditA = Qudit(d_A)
         self.d_B = d_B if d_B is not None else d_A
-        self.quditB = Qudit(d_B)
+        qudit_kwargs = {} if qudit_kwargs is None else dict(qudit_kwargs)
+        self.quditA = qudit_class(self.d_A, **qudit_kwargs)
+        self.quditB = qudit_class(self.d_B, **qudit_kwargs)
         self.dit = lambda a, b: tensor(basis(self.d_A, a), basis(self.d_B, b))
 
     def qudit_from_list(self, digitList: (float, int, int)):
