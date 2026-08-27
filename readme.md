@@ -22,6 +22,25 @@ python -m pip install -e ".[notebooks]" jupyterlab
 jupyter lab
 ```
 
+## generate the data
+
+```
+python tools/generate_break_even_gamma_ratio_alpha7.py
+```
+
+```
+python tools/generate_break_even_gamma_ratio_alpha7.py \
+  --ratios 0.1 \
+  --gamma-loss-min 1e-4 \
+  --gamma-loss-max 1e-2 \
+  --gamma-loss-points 15 \
+```
+
+```
+python tools/generate_break_even_gamma_ratio_alpha7.py \
+  --ratios 10 \
+```
+
 ## Photon-distribution-aware discrete loss model
 
 `PhotonDistributionQudit` is an opt-in replacement for the loss probabilities
